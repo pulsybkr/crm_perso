@@ -17,9 +17,9 @@ La base est créée et initialisée automatiquement au premier lancement (46 pla
 ## Commandes utiles
 
 ```bash
-node scripts/init-db.js --reset  # SAUVEGARDE puis réinitialise avec les données du dossier
-npm run db:snapshot / db:check   # snapshot manuel / statistiques
-node scripts/check-db.js   # statistiques rapides de la base
+npm run db:reset    # SAUVEGARDE puis réinitialise avec les données du dossier
+npm run db:snapshot  # écrit un snapshot JSON manuel
+npm run db:check    # statistiques rapides
 ```
 
 ## Structure
@@ -27,12 +27,16 @@ node scripts/check-db.js   # statistiques rapides de la base
 - `app/page.jsx` — interface React (plateformes, plan d'action, règles d'or)
 - `app/api/platforms/route.js` — CRUD plateformes (GET/POST/PATCH/DELETE)
 - `app/api/actions/route.js` — CRUD actions
-- `app/api/snapshot/route.js` — déclenche un snapshot (appelé à chaque sauvegarde)
+- `app/api/snapshot/route.js` — écrit un snapshot (appelé à chaque sauvegarde) + GET dernier snapshot
 - `app/api/stats/route.js` — statistiques
 - `lib/db.js` — couche d'accès SQLite (better-sqlite3, WAL)
+- `lib/schema.js` — schéma + données initiales du dossier (partagé API/CLI)
+- `scripts/init-db.js` — init / --reset (avec sauvegarde automatique avant reset)
+- `scripts/check-db.js` — statistiques rapides
 - `data/suivi-brazza.db` — LA base de données
 - `data/backups/*.json` — snapshots automatiques (rotation 40)
 - `suivi-brazza.html` + `suivi-brazza.js` — ancienne version autonome (localStorage), conservée en secours
+- `dossier-travail-en-ligne-brazzaville.md` — le dossier de recherche complet (oct. 2026)
 
 ## Reste à faire plus tard
 - [ ] Historique des gains mensuels (table `earnings`)
