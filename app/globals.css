@@ -280,3 +280,13 @@ footer {
 @media (max-width: 700px) {
   .kb-board-6 .kb-col { flex: 1 1 100%; min-width: 0; }
 }
+
+/* ===== v2.3 : multi-comptes ===== */
+.acct-list { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
+.acct { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #fbfbfc; }
+.acct-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acct-label { min-width: 90px; }
+.acct-user { font-size: 12px; color: var(--mut); background: #f1f3f5; border-radius: 6px; padding: 2px 8px; }
+.acct-pw { font-size: 12px; font-family: ui-monospace, monospace; width: 150px; }
+.acct-note { font-size: 12px; color: var(--mut); margin-top: 6px; }
+.acct-form { display: flex; flex-direction: column; gap: 4px; }

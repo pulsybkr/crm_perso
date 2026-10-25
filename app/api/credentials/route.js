@@ -11,39 +11,41 @@ function bad(msg, code = 400) {
   return NextResponse.json({ error: msg }, { status: code });
 }
 
-/* GET → état du coffre (configuré ? déverrouillé côté client ? nb d'entrées)
-   GET ?ids=1 → liste simple des platform_id ayant des identifiants (jamais de secret)
-   GET ?platform=xxx → décrypte UNE entrée (le client passe le maître en header) */
+const needMaster = (req) => {
+  const master = req.headers.get('x-master');
+  if (!master || !verifyMaster(master)) return null;
+  return master;
+};
+
+/* ============ Coffre ============ */
+
+/* GET → état du coffre · ?ids=1 → platform_id ayant des comptes · ?platform=xxx → comptes décryptés */
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  const pid = searchParams.get('platform');
 
   if (searchParams.get('ids') === '1') {
-    const rows = db().prepare('SELECT platform_id FROM credentials').all();
+    const rows = db().prepare('SELECT DISTINCT platform_id FROM accounts').all();
     return NextResponse.json(rows.map(r => r.platform_id));
   }
 
-  // GET ?platform=xxx → décrypte UNE entrée (le client passe le maître en header)
+  const pid = searchParams.get('platform');
   if (pid) {
-    const master = req.headers.get('x-master');
-    if (!master) return bad('coffre verrouillé', 423);
-    if (!verifyMaster(master)) return bad('mot de passe maître invalide', 401);
-    const row = db().prepare('SELECT platform_id, login_url, username, secret, cnote FROM credentials WHERE platform_id = ?').get(pid);
-    if (!row) return NextResponse.json(null);
-    try {
-      row.password = decryptWithMaster(master, row.secret);
-    } catch {
-      return bad('déchiffrement impossible (maître changé ?)', 500);
-    }
-    delete row.secret;
-    return NextResponse.json(row);
+    const master = needMaster(req);
+    if (!master) return bad('coffre verrouillé ou maître invalide', 423);
+    const rows = db().prepare('SELECT id, label, username, secret, cnote, position FROM accounts WHERE platform_id = ? ORDER BY position, id').all(pid);
+    return NextResponse.json(rows.map(r => {
+      let password = '';
+      try { password = decryptWithMaster(master, r.secret); } catch { password = '⚠️ illisible'; }
+      const { secret, ...rest } = r;
+      return { ...rest, password };
+    }));
   }
 
-  const count = db().prepare('SELECT COUNT(*) AS c FROM credentials').get().c;
+  const count = db().prepare('SELECT COUNT(*) AS c FROM accounts').get().c;
   return NextResponse.json({ configured: isConfigured(), count });
 }
 
-/* POST → définir le maître (première fois) ou le changer */
+/* POST → définir le maître (première fois) ou le changer (rechiffre tout) */
 export async function POST(req) {
   try {
     const b = await req.json();
@@ -51,14 +53,12 @@ export async function POST(req) {
     if (String(b.master).length < 6) return bad('mot de passe maître : 6 caractères minimum', 422);
     if (isConfigured()) {
       if (!verifyMaster(b.oldMaster || '')) return bad('ancien mot de passe maître invalide', 401);
-      // rechiffrer toutes les entrées avec le nouveau maître
-      const rows = db().prepare('SELECT platform_id, secret FROM credentials').all();
+      const rows = db().prepare('SELECT id, secret FROM accounts').all();
       const tx = db().transaction(() => {
         rows.forEach(r => {
           const plain = decryptWithMaster(b.oldMaster, r.secret);
-          const re = encryptWithMaster(b.master, plain);
-          db().prepare('UPDATE credentials SET secret = ?, updated_at = datetime("now") WHERE platform_id = ?')
-            .run(re, r.platform_id);
+          db().prepare("UPDATE accounts SET secret = ?, updated_at = datetime('now') WHERE id = ?")
+            .run(encryptWithMaster(b.master, plain), r.id);
         });
         setMaster(b.master);
       });
@@ -72,41 +72,55 @@ export async function POST(req) {
   }
 }
 
-/* PUT → enregistrer / mettre à jour les identifiants d'une plateforme */
+/* ============ Comptes ============ */
+
+/* PUT → créer OU mettre à jour un compte.
+   body: { platformId, id?, label?, username?, password?, cnote?, loginUrl? } */
 export async function PUT(req) {
   try {
     const b = await req.json();
-    const master = req.headers.get('x-master');
     if (!b || !b.platformId) return bad('platformId requis');
-    if (!master || !verifyMaster(master)) return bad('coffre verrouillé ou maître invalide', 423);
+    const master = needMaster(req);
+    if (!master) return bad('coffre verrouillé ou maître invalide', 423);
 
-    const secret = ('password' in b) ? encryptWithMaster(master, String(b.password || '')) : null;
-    const cur = db().prepare('SELECT * FROM credentials WHERE platform_id = ?').get(b.platformId);
-
-    if (cur) {
-      if (secret !== null) {
-        db().prepare('UPDATE credentials SET login_url = ?, username = ?, secret = ?, cnote = ?, updated_at = datetime("now") WHERE platform_id = ?')
-          .run(b.loginUrl ?? cur.login_url, b.username ?? cur.username, secret, b.cnote ?? cur.cnote, b.platformId);
-      } else {
-        db().prepare('UPDATE credentials SET login_url = ?, username = ?, cnote = ?, updated_at = datetime("now") WHERE platform_id = ?')
-          .run(b.loginUrl ?? cur.login_url, b.username ?? cur.username, b.cnote ?? cur.cnote, b.platformId);
-      }
-    } else {
-      if (secret === null) return bad('password requis à la création', 422);
-      db().prepare('INSERT INTO credentials (platform_id, login_url, username, secret, cnote) VALUES (?, ?, ?, ?, ?)')
-        .run(b.platformId, b.loginUrl || '', b.username || '', secret, b.cnote || '');
+    // loginUrl facultatif → mis sur la plateforme
+    if (b.loginUrl !== undefined) {
+      db().prepare("UPDATE platforms SET login_url = ?, updated_at = datetime('now') WHERE id = ?")
+        .run(String(b.loginUrl || ''), b.platformId);
     }
-    return NextResponse.json({ ok: true });
+
+    if (b.id) {
+      const cur = db().prepare('SELECT * FROM accounts WHERE id = ?').get(b.id);
+      if (!cur) return bad('compte introuvable', 404);
+      const secret = ('password' in b && b.password !== '') ? encryptWithMaster(master, String(b.password)) : null;
+      if (secret !== null) {
+        db().prepare("UPDATE accounts SET label = ?, username = ?, secret = ?, cnote = ?, updated_at = datetime('now') WHERE id = ?")
+          .run(b.label ?? cur.label, b.username ?? cur.username, secret, b.cnote ?? cur.cnote, b.id);
+      } else {
+        db().prepare("UPDATE accounts SET label = ?, username = ?, cnote = ?, updated_at = datetime('now') WHERE id = ?")
+          .run(b.label ?? cur.label, b.username ?? cur.username, b.cnote ?? cur.cnote, b.id);
+      }
+      return NextResponse.json({ ok: true, id: b.id });
+    }
+
+    db().prepare('INSERT INTO accounts (id, platform_id, label, username, secret, cnote, position) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(
+        'c-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        b.platformId, b.label || 'Compte', b.username || '',
+        encryptWithMaster(master, String(b.password || '')), b.cnote || '',
+        db().prepare('SELECT COALESCE(MAX(position), -1) AS m FROM accounts WHERE platform_id = ?').get(b.platformId).m + 1
+      );
+    return NextResponse.json({ ok: true }, { status: 201 });
   } catch (e) {
     return bad(e.message, 500);
   }
 }
 
-/* DELETE → effacer les identifiants d'une plateforme */
+/* DELETE → supprimer un compte (?account=xxx) */
 export async function DELETE(req) {
   const { searchParams } = new URL(req.url);
-  const pid = searchParams.get('platform');
-  if (!pid) return bad('platform requis');
-  const r = db().prepare('DELETE FROM credentials WHERE platform_id = ?').run(pid);
+  const aid = searchParams.get('account');
+  if (!aid) return bad('account requis');
+  const r = db().prepare('DELETE FROM accounts WHERE id = ?').run(aid);
   return NextResponse.json({ ok: true, deleted: r.changes });
 }

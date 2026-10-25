@@ -253,6 +253,15 @@ export default function Home() {
           onDelete={editAction.id ? removeA : undefined}
         />
       )}
+      {editPlatform && (
+        <PlatformModal
+          platform={editPlatform}
+          onClose={() => setEditPlatform(null)}
+          onSave={saveP}
+          onDelete={removeP}
+          onCreds={p => { setCredFor(p); }}
+        />
+      )}
       {credFor && (
         <CredentialsModal
           platform={credFor}
