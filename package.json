@@ -1,0 +1,19 @@
+{
+  "name": "suivi-brazza",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:reset": "node scripts/init-db.js --reset",
+    "db:check": "node scripts/check-db.js",
+    "db:snapshot": "node scripts/snapshot.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "next": "^16.4.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}

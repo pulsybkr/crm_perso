@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suivi Brazza — plateformes & actions</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🇨🇬</text></svg>">
+<style>
+  :root{
+    --ink:#1c2430; --mut:#68727d; --line:#e3e6ea; --bg:#f4f5f7; --acc:#0a7d43;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 20px 60px}
+  header h1{margin:0;font-size:26px;letter-spacing:-.3px}
+  header .sub{margin:4px 0 0;color:var(--mut);font-size:13.5px}
+  .tabs{display:flex;gap:8px;margin:18px 0 14px;flex-wrap:wrap}
+  .tabs button{border:1px solid var(--line);background:#fff;padding:8px 16px;border-radius:999px;font-size:14px;font-weight:600;cursor:pointer;color:var(--ink)}
+  .tabs button.active{background:var(--ink);border-color:var(--ink);color:#fff}
+  .stats{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px;color:var(--ink)}
+  .chip .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .chip.active{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink) inset}
+  .chip.money{cursor:default;background:#e3f4e8;border-color:#bbe3c8;color:#14532d}
+  .hint{color:var(--mut);font-size:12px;margin:2px 0 14px}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .toolbar input[type=search],.toolbar select{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 12px;font-size:14px;color:var(--ink)}
+  .toolbar input[type=search]{flex:1;min-width:220px}
+  details.catsec{background:transparent;margin-bottom:14px}
+  details.catsec>summary{cursor:pointer;font-weight:700;font-size:15.5px;padding:8px 4px;list-style:none;display:flex;align-items:center;gap:8px;user-select:none}
+  details.catsec>summary::-webkit-details-marker{display:none}
+  details.catsec>summary .cnt{color:var(--mut);font-weight:600;font-size:13px}
+  details.catsec>summary .tri{color:var(--mut);font-size:12px}
+  .card{display:flex;flex-direction:column;gap:7px;background:#fff;border:1px solid var(--line);border-radius:11px;padding:11px 14px;margin-bottom:8px}
+  .row1{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .pname{font-weight:700;color:var(--ink);text-decoration:none;font-size:15px}
+  .pname:hover{color:var(--acc);text-decoration:underline}
+  .catchip{font-size:11px;font-weight:600;background:#eef0f2;color:var(--mut);padding:2px 8px;border-radius:999px}
+  .pnote{color:var(--mut);font-size:13px}
+  .row2{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .unote{flex:1;min-width:170px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;color:var(--ink)}
+  .gain{width:92px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;color:var(--ink)}
+  .del{border:none;background:transparent;color:#b0b6bd;font-size:17px;cursor:pointer;padding:2px 6px;border-radius:6px}
+  .del:hover{color:#b91c1c;background:#fbe7e7}
+  select.stsel{border:none;border-radius:999px;padding:5px 10px;font-size:12.5px;font-weight:700;cursor:pointer;max-width:210px}
+  details.addbox{background:#fff;border:1px dashed #c8cdd3;border-radius:11px;padding:10px 14px;margin:4px 0 16px}
+  details.addbox summary{cursor:pointer;font-weight:600;color:var(--acc);font-size:14px}
+  details.addbox form{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  details.addbox input,details.addbox select{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13.5px}
+  details.addbox input[data-f=name]{flex:1;min-width:180px}
+  details.addbox input[data-f=note]{flex:2;min-width:220px}
+  .btn{border:none;background:var(--acc);color:#fff;border-radius:9px;padding:8px 16px;font-size:14px;font-weight:600;cursor:pointer}
+  .btn:hover{filter:brightness(1.06)}
+  .arow{display:flex;align-items:flex-start;gap:11px;background:#fff;border:1px solid var(--line);border-radius:11px;padding:11px 14px;margin-bottom:8px;cursor:pointer}
+  .arow .astat{border:none;border-radius:999px;padding:4px 11px;font-size:11.5px;font-weight:700;cursor:pointer;flex-shrink:0;margin-top:1px}
+  .arow .at{font-weight:600;font-size:14.5px}
+  .arow .ad{color:var(--mut);font-size:13px}
+  .arow .body{flex:1}
+  .arow.done .at{text-decoration:line-through;color:var(--mut)}
+  details.blk>summary{cursor:pointer;font-weight:700;color:#8f1f1f;font-size:14.5px;padding:8px 4px}
+  .blkrow{display:flex;gap:10px;align-items:baseline;background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin-bottom:6px;flex-wrap:wrap}
+  .blkrow .bn{font-weight:700;font-size:13.5px}
+  .blkrow .br{color:var(--mut);font-size:12.5px}
+  footer{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:26px;padding-top:16px;border-top:1px solid var(--line)}
+  footer .ghost{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:9px;padding:7px 14px;font-size:13.5px;font-weight:600;cursor:pointer}
+  footer .note{color:var(--mut);font-size:12px}
+  .rules .rule{background:#fff;border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:10px;padding:12px 16px;margin-bottom:10px}
+  .rules .rule b{font-size:14.5px}
+  .rules .rule p{margin:3px 0 0;color:var(--mut);font-size:13.5px}
+  .secnote{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 16px;color:var(--mut);font-size:13px;margin-bottom:14px}
+  @media (max-width:640px){ select.stsel{max-width:150px} .wrap{padding:16px 12px 50px} header h1{font-size:22px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🇨🇬 Suivi Brazza — plateformes &amp; actions</h1>
+    <p class="sub">Base de données locale · tes données restent dans ce navigateur · exporte régulièrement une sauvegarde</p>
+  </header>
+
+  <div class="tabs" id="tabs">
+    <button data-tab="platforms" class="active">🌐 Plateformes</button>
+    <button data-tab="actions">✅ Plan d'action</button>
+    <button data-tab="rules">📜 Règles d'or</button>
+  </div>
+
+  <div id="stats" class="stats"></div>
+  <p class="hint" id="statshint">Clique sur un statut pour filtrer la liste.</p>
+
+  <section id="tab-platforms">
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="🔎 Rechercher une plateforme, une note…">
+      <select id="fcat"><option value="all">Toutes les catégories</option></select>
+    </div>
+    <details class="addbox">
+      <summary>＋ Ajouter une plateforme</summary>
+      <form id="addp">
+        <input data-f="name" required placeholder="Nom de la plateforme">
+        <input data-f="url" placeholder="URL (https://…)">
+        <select data-f="cat" id="addcat"></select>
+        <input data-f="note" placeholder="Note (tarif, conditions…)">
+        <button class="btn" type="submit">Ajouter</button>
+      </form>
+    </details>
+    <div id="plist"></div>
+    <details class="blk" id="blksec">
+      <summary>❌ À éviter — fermées ou bloquées pour le Congo</summary>
+      <div id="blklist" style="margin-top:8px"></div>
+    </details>
+  </section>
+
+  <section id="tab-actions" style="display:none">
+    <details class="addbox">
+      <summary>＋ Ajouter une action</summary>
+      <form id="adda">
+        <input data-f="title" required placeholder="Action à faire" style="flex:1;min-width:180px">
+        <select data-f="phase" id="addphase"></select>
+        <input data-f="detail" placeholder="Détail (optionnel)" style="flex:2;min-width:200px">
+        <button class="btn" type="submit">Ajouter</button>
+      </form>
+    </details>
+    <div id="alist"></div>
+  </section>
+
+  <section id="tab-rules" style="display:none" class="rules">
+    <div class="rule"><b>1 compte = 1 personne, jamais de compte partagé.</b><p>Vrai nom, email dédié et pièce d'identité de chaque travailleur. Un compte partagé = bannissement de toute l'équipe sur la plateforme.</p></div>
+    <div class="rule"><b>Pas de VPN sur les plateformes avec KYC / pièce d'identité.</b><p>Outlier, Alignerr et similaires vérifient le pays — un VPN résidentiel peut passer à l'inscription mais crève au retrait. Réservé aux plateformes sans KYC, et à tes risques.</p></div>
+    <div class="rule"><b>Toujours ≥ 3 sources actives par personne.</b><p>Une plateforme coupe sans prévenir (rôles complets, projet fini). Trois sources actives = un revenu stable.</p></div>
+    <div class="rule"><b>Le français écrit impeccable = la compétence n°1.</b><p>C'est exactement ce que les évaluations filtrent. Réponses soignées, zéro faute, consignes suivies à la lettre — y compris les questions pièges « gold ».</p></div>
+    <div class="rule"><b>Le Lingala &amp; le Kituba = votre avantage comparatif.</b><p>Peu de monde dans le monde peut livrer ces données — nourris la prospection B2B (Lelapa, Sigma, AfriData) en continu.</p></div>
+    <div class="rule"><b>Suis tout dans ce tracker.</b><p>Chaque inscription, chaque évaluation passée, chaque gain — sinon tu ne sauras jamais quoi scale et quoi couper.</p></div>
+    <div class="secnote">💶 Paiements : Payoneer / PayPal / compte FR centralisateur → transfert vers Brazzaville (déjà réglé de ton côté). Les « €/mois » dans la liste = ce que tu as réellement encaissé le mois dernier, par plateforme.</div>
+  </section>
+
+  <footer>
+    <button class="ghost" id="btnexport">💾 Exporter (sauvegarde JSON)</button>
+    <button class="ghost" id="btnimport">📂 Importer une sauvegarde</button>
+    <button class="ghost" id="btnreset">♻️ Réinitialiser (données du dossier)</button>
+    <input type="file" id="importfile" accept=".json,application/json" style="display:none">
+    <span class="note">Sauvegarde automatique dans ce navigateur à chaque modification.</span>
+  </footer>
+</div>
+<script src="suivi-brazza.js"></script>
+</body>
+</html>
