@@ -48,7 +48,12 @@ export default function PlatformModal({ platform, onClose, onSave, onDelete, onC
           </label>
           <label>
             Lien
-            <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" />
+            <span className="pwrow">
+              <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" />
+              {url && (
+                <a className="btn ghost sm" target="_blank" rel="noopener noreferrer" href={url} title="Ouvrir le site">↗</a>
+              )}
+            </span>
           </label>
           <div className="modal-cols">
             <label>

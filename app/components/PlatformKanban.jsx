@@ -62,7 +62,19 @@ export default function PlatformKanban({ platforms, onMove, onEdit, onAdd, block
                     >
                       <div className="kb-card-top">
                         <span className="kb-cat" data-cat={p.cat}>{CAT_SHORT[p.cat] || p.cat}</span>
-                        <span className="kb-gain">{p.gain ? p.gain + ' €' : ''}</span>
+                        <span className="kb-top-right">
+                          {p.gain ? <span className="kb-gain">{p.gain} €</span> : null}
+                          {p.url && (
+                            <a
+                              className="kb-link"
+                              href={p.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={p.url}
+                              onClick={e => e.stopPropagation()}
+                            >↗</a>
+                          )}
+                        </span>
                       </div>
                       <div className="kb-title">{p.name}</div>
                       {p.unote && <div className="kb-unote">📝 {p.unote}</div>}
