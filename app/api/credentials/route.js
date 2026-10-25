@@ -11,10 +11,17 @@ function bad(msg, code = 400) {
   return NextResponse.json({ error: msg }, { status: code });
 }
 
-/* GET → état du coffre (configuré ? déverrouillé côté client ? nb d'entrées) */
+/* GET → état du coffre (configuré ? déverrouillé côté client ? nb d'entrées)
+   GET ?ids=1 → liste simple des platform_id ayant des identifiants (jamais de secret)
+   GET ?platform=xxx → décrypte UNE entrée (le client passe le maître en header) */
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const pid = searchParams.get('platform');
+
+  if (searchParams.get('ids') === '1') {
+    const rows = db().prepare('SELECT platform_id FROM credentials').all();
+    return NextResponse.json(rows.map(r => r.platform_id));
+  }
 
   // GET ?platform=xxx → décrypte UNE entrée (le client passe le maître en header)
   if (pid) {

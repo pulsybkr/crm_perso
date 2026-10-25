@@ -15,3 +15,19 @@ export const A_STATUSES = {
   en_cours: { label: 'En cours', bg: '#e0ecfb', fg: '#1d4ed8' },
   fait:    { label: 'Fait ✔',   bg: '#d8f2de', fg: '#166534' }
 };
+
+export const CATS = [
+  { id: 'ia',      label: '🤖 Entraînement IA & données' },
+  { id: 'langues', label: '🗣️ Langues & voix (Lingala/Kituba/FR)' },
+  { id: 'agg',     label: '📡 Agrégateurs à surveiller' },
+  { id: 'qa',      label: '🧪 Tests apps & sites' },
+  { id: 'etudes',  label: '🎯 Études rémunérées' },
+  { id: 'micro',   label: '⚙️ Micro-tâches' },
+  { id: 'free',    label: '💼 Freelance' },
+  { id: 'tuto',    label: '🎓 Tutorat' },
+  { id: 'transc',  label: '📝 Transcription & sous-titrage' }
+];
+export const CAT_SHORT = {
+  ia: '🤖 IA', langues: '🗣️ Langues', agg: '📡 Agg.', qa: '🧪 QA', etudes: '🎯 Études',
+  micro: '⚙️ Micro', free: '💼 Freelance', tuto: '🎓 Tutorat', transc: '📝 Transc.'
+};
