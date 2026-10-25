@@ -1,23 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, startTransition } from 'react';
+import Kanban from './components/Kanban.jsx';
+import ActionModal from './components/ActionModal.jsx';
+import CredentialsModal from './components/CredentialsModal.jsx';
+import { P_STATUSES, A_STATUSES } from './lib/kb.js';
 
 /* ================= Constantes ================= */
-const P_STATUSES = {
-  pas_inscrit:   { label: 'Pas inscrit',                 short: 'Pas inscrit',  bg: '#eef0f2', fg: '#4b5561' },
-  en_cours:      { label: 'Inscription / éval. en cours', short: 'En cours',     bg: '#e0ecfb', fg: '#1d4ed8' },
-  sans_missions: { label: 'Inscrit · pas de missions',    short: 'Sans missions', bg: '#fdf0d5', fg: '#b45309' },
-  avec_missions: { label: 'Inscrit · missions ✔',        short: 'Missions ✔',    bg: '#d8f2de', fg: '#166534' },
-  pause:         { label: 'À laisser / en pause',        short: 'Pause',         bg: '#ede6f7', fg: '#6d28d9' },
-  abandonne:     { label: 'Abandonné',                    short: 'Abandonné',     bg: '#f6e2e2', fg: '#9f1239' }
-};
-const A_STATUSES = {
-  a_faire: { label: 'À faire',  bg: '#eef0f2', fg: '#4b5561' },
-  en_cours: { label: 'En cours', bg: '#e0ecfb', fg: '#1d4ed8' },
-  fait:    { label: 'Fait ✔',   bg: '#d8f2de', fg: '#166534' }
-};
-const A_ORDER = ['a_faire', 'en_cours', 'fait'];
-
 const CATS = [
   { id: 'ia',      label: '🤖 Entraînement IA & données' },
   { id: 'langues', label: '🗣️ Langues & voix (Lingala/Kituba/FR)' },
@@ -29,7 +18,6 @@ const CATS = [
   { id: 'tuto',    label: '🎓 Tutorat' },
   { id: 'transc',  label: '📝 Transcription & sous-titrage' }
 ];
-const CAT_LABEL = Object.fromEntries([...CATS.map(c => [c.id, c.label]), ['bloquees', '❌ Bloquées']]);
 
 const PHASES = [
   { id: 'p1', label: 'Phase 1 · Jours 1–15 — Installation' },
@@ -80,14 +68,24 @@ export default function Home() {
   const [snap, setSnap] = useState('—');
   const [loading, setLoading] = useState(true);
 
+  /* Modales */
+  const [editAction, setEditAction] = useState(null);   // ActionModal
+  const [credFor, setCredFor] = useState(null);         // CredentialsModal (plateforme)
+
+  /* Coffre : maître en mémoire uniquement */
+  const [vault, setVault] = useState({ configured: false, unlocked: false, master: null });
+
   const dq = useDebounced(q, 250);
 
   const refresh = useCallback(async () => {
-    const [ps, as, sn] = await Promise.all([getPlatforms(), getActions(),
-      fetch('/api/snapshot').then(r => r.json()).catch(() => null)]);
+    const [ps, as, sn, vd] = await Promise.all([getPlatforms(), getActions(),
+      fetch('/api/snapshot').then(r => r.json()).catch(() => null),
+      fetch('/api/credentials').then(r => r.json()).catch(() => ({ configured: false }))
+    ]);
     startTransition(() => {
       setPlatforms(ps); setActions(as);
       if (sn && sn.file) setSnap(sn.file);
+      setVault(v => ({ ...v, configured: !!vd.configured }));
       setLoading(false);
     });
   }, []);
@@ -95,40 +93,38 @@ export default function Home() {
   useEffect(() => { refresh().catch(e => setFlash('Erreur chargement : ' + e.message)); }, [refresh]);
 
   const notify = (msg) => { setFlash(msg); setTimeout(() => setFlash(''), 2600); };
+  const snapNow = () => postSnapshot().then(s => setSnap(s.file || '—')).catch(() => { });
 
   /* ---- Plateformes ---- */
   const patchP = (id, fields) => {
     setPlatforms(prev => prev.map(p => (p.id === id ? { ...p, ...fields } : p)));
-    patchPlatform(id, fields)
-      .then(() => postSnapshot().then(s => setSnap(s.file || '—')))
-      .catch(e => { notify('Erreur : ' + e.message); refresh(); });
+    patchPlatform(id, fields).then(snapNow).catch(e => { notify('Erreur : ' + e.message); refresh(); });
   };
-  const addP = (p) => postPlatform(p)
-    .then(() => refresh()).then(() => postSnapshot().then(s => setSnap(s.file || '—')))
+  const addP = (p) => postPlatform(p).then(() => refresh()).then(snapNow)
     .then(() => notify('Plateforme ajoutée ✔')).catch(e => notify('Erreur : ' + e.message));
   const removeP = (id) => {
     if (!window.confirm('Supprimer cette plateforme ?')) return;
     delPlatform(id).then(() => refresh()).then(() => notify('Supprimée ✔')).catch(e => notify('Erreur : ' + e.message));
   };
 
-  /* ---- Actions ---- */
-  const cycleA = (id) => {
-    const a = actions.find(x => x.id === id);
-    if (!a) return;
-    const next = A_ORDER[(A_ORDER.indexOf(a.status) + 1) % A_ORDER.length];
-    setActions(prev => prev.map(x => (x.id === id ? { ...x, status: next } : x)));
-    patchAction(id, { status: next })
-      .then(() => postSnapshot().then(s => setSnap(s.file || '—')))
-      .catch(e => { notify('Erreur : ' + e.message); refresh(); });
+  /* ---- Actions (kanban) ---- */
+  const moveA = (id, status) => {
+    setActions(prev => prev.map(a => (a.id === id ? { ...a, status } : a)));
+    patchAction(id, { status }).then(snapNow).catch(e => { notify('Erreur : ' + e.message); refresh(); });
   };
-  const addA = (a) => postAction(a).then(() => refresh()).then(() => notify('Action ajoutée ✔')).catch(e => notify('Erreur : ' + e.message));
-  const removeA = (id) => {
-    if (!window.confirm('Supprimer cette action ?')) return;
-    delAction(id).then(() => refresh()).catch(e => notify('Erreur : ' + e.message));
+  const saveA = (a) => {
+    const isNew = !a.id;
+    (isNew ? postAction({ title: a.title, phase: a.phase, detail: a.detail })
+          : patchAction(a.id, { title: a.title, detail: a.detail, phase: a.phase, status: a.status, unote: a.unote }))
+      .then(() => refresh()).then(snapNow)
+      .then(() => notify(isNew ? 'Action ajoutée ✔' : 'Action enregistrée ✔'))
+      .catch(e => notify('Erreur : ' + e.message));
+    setEditAction(null);
   };
-  const noteA = (id, unote) => {
-    setActions(prev => prev.map(x => (x.id === id ? { ...x, unote } : x)));
-    patchAction(id, { unote }).catch(e => notify('Erreur : ' + e.message));
+  const removeA = (a) => {
+    delAction(a.id).then(() => refresh()).then(snapNow).then(() => notify('Action supprimée'))
+      .catch(e => notify('Erreur : ' + e.message));
+    setEditAction(null);
   };
 
   /* ---- Stats ---- */
@@ -155,6 +151,14 @@ export default function Home() {
 
   const blockedList = useMemo(() => (platforms || []).filter(p => p.cat === 'bloquees'), [platforms]);
 
+  const credsState = {
+    configured: vault.configured,
+    unlocked: vault.unlocked,
+    master: vault.master,
+    setMaster: (m, unlocked) => setVault(v => ({ ...v, master: m, unlocked })),
+    lock: () => setVault(v => ({ ...v, master: null, unlocked: false }))
+  };
+
   if (loading) return <div className="loading">Chargement de la base…</div>;
 
   return (
@@ -163,13 +167,20 @@ export default function Home() {
         <div className="headrow">
           <div>
             <h1>🇨🇬 Suivi Brazza</h1>
-            <p className="sub">Next.js + SQLite · sauvegarde automatique dans la base et en snapshot JSON</p>
+            <p className="sub">Next.js + SQLite · coffre-fort AES-256 · sauvegarde auto</p>
           </div>
-          <div className="snap">💾 Dernier snapshot : <code>{snap}</code></div>
+          <div className="snap">
+            💾 Dernier snapshot : <code>{snap}</code>
+            {vault.configured && (
+              <button className="btn ghost sm" onClick={credsState.lock} title="Verrouiller le coffre">
+                {vault.unlocked ? '🔒 Verrouiller' : '🔐 Coffre'}
+              </button>
+            )}
+          </div>
         </div>
         <nav className="tabs">
           <button className={tab === 'platforms' ? 'active' : ''} onClick={() => setTab('platforms')}>🌐 Plateformes</button>
-          <button className={tab === 'actions' ? 'active' : ''} onClick={() => setTab('actions')}>✅ Plan d&apos;action</button>
+          <button className={tab === 'kanban' ? 'active' : ''} onClick={() => setTab('kanban')}>📋 Kanban</button>
           <button className={tab === 'rules' ? 'active' : ''} onClick={() => setTab('rules')}>📜 Règles d&apos;or</button>
         </nav>
       </header>
@@ -209,9 +220,12 @@ export default function Home() {
                 {items.map(p => (
                   <article className="card" key={p.id}>
                     <div className="row1">
-                      {p.url
-                        ? <a className="pname" target="_blank" rel="noopener noreferrer" href={p.url}>{p.name} ↗</a>
-                        : <span className="pname">{p.name}</span>}
+                      <span className="pnrow">
+                        {p.url
+                          ? <a className="pname" target="_blank" rel="noopener noreferrer" href={p.url}>{p.name} ↗</a>
+                          : <span className="pname">{p.name}</span>}
+                        <button className="vaultbtn" onClick={() => setCredFor(p)} title="Identifiants (coffre-fort)">🔐</button>
+                      </span>
                       <select
                         className="stsel"
                         value={p.status}
@@ -225,7 +239,7 @@ export default function Home() {
                     {p.note && <p className="pnote">{p.note}</p>}
                     <div className="row2">
                       <input
-                        className="unote" placeholder="Tes notes (login, date d'inscription…)"
+                        className="unote" placeholder="Tes notes (date d'inscription…)"
                         defaultValue={p.unote}
                         onBlur={e => { if (e.target.value !== p.unote) patchP(p.id, { unote: e.target.value }); }}
                       />
@@ -257,38 +271,22 @@ export default function Home() {
         </main>
       )}
 
-      {tab === 'actions' && (
-        <main>
-          <AddAction onAdd={addA} />
-          {PHASES.map(ph => {
-            const items = (actions || []).filter(a => a.phase === ph.id);
-            if (!items.length) return null;
-            const done = items.filter(a => a.status === 'fait').length;
-            return (
-              <section className="catsec" key={ph.id}>
-                <h2>{ph.label} <span className="cnt">· {done}/{items.length}</span></h2>
-                {items.map(a => (
-                  <article className={'arow' + (a.status === 'fait' ? ' done' : '')} key={a.id}>
-                    <button
-                      className="astat"
-                      style={{ background: A_STATUSES[a.status].bg, color: A_STATUSES[a.status].fg }}
-                      onClick={() => cycleA(a.id)}
-                    >{A_STATUSES[a.status].label}</button>
-                    <div className="body">
-                      <div className="at">{a.title}</div>
-                      {a.detail && <div className="ad">{a.detail}</div>}
-                      <input
-                        className="unote" placeholder="Tes notes…"
-                        defaultValue={a.unote || ''}
-                        onBlur={e => { if (e.target.value !== (a.unote || '')) noteA(a.id, e.target.value); }}
-                      />
-                    </div>
-                    <button className="del" onClick={() => removeA(a.id)} title="Supprimer">✕</button>
-                  </article>
-                ))}
-              </section>
-            );
-          })}
+      {tab === 'kanban' && (
+        <main className="kb-main">
+          <Kanban
+            actions={actions || []}
+            onMove={moveA}
+            onEdit={a => setEditAction(a)}
+            onDelete={removeA}
+            onAdd={status => setEditAction({ id: null, status, phase: 'p1' })}
+          />
+          <details className="addbox">
+            <summary>📖 Vue par phase (légende)</summary>
+            <p className="kb-legend">
+              P1 = Installation · P2 = Formation &amp; évaluations · P3 = Croisière · P4 = Scale —
+              le numéro sur chaque carte indique la phase ; change-la dans la modale d&apos;édition.
+            </p>
+          </details>
         </main>
       )}
 
@@ -300,13 +298,31 @@ export default function Home() {
           <div className="rule"><b>Le français écrit impeccable = la compétence n°1.</b><p>C&apos;est ce que les évaluations filtrent : zéro faute, consignes suivies, questions pièges « gold » respectées.</p></div>
           <div className="rule"><b>Lingala &amp; Kituba = votre avantage comparatif.</b><p>Peu de concurrents mondiaux sur ces données — nourrir la prospection B2B (Lelapa, Sigma, AfriData) en continu.</p></div>
           <div className="rule"><b>Tout est dans la base.</b><p>Chaque inscription, évaluation, gain — sinon impossible de savoir quoi scale et quoi couper.</p></div>
-          <div className="secnote">💶 Paiements : Payoneer / PayPal / compte FR centralisateur → transfert vers Brazzaville (déjà réglé). « €/mois » = réellement encaissé le mois dernier.</div>
+          <div className="secnote">🔐 Les mots de passe des plateformes sont chiffrés (AES-256-GCM) avec ton mot de passe maître — même toi tu ne peux les lire qu&apos;après déverrouillage. Le maître n&apos;est jamais stocké : ne le perds pas.</div>
         </main>
       )}
 
       <footer>
-        <span className="note">Base : <code>data/suivi-brazza.db</code> · snapshots : <code>data/backups/</code> (40 conservés)</span>
+        <span className="note">Base : <code>data/suivi-brazza.db</code> · snapshots : <code>data/backups/</code> (40) · coffre : AES-256-GCM</span>
       </footer>
+
+      {/* Modales */}
+      {editAction && (
+        <ActionModal
+          action={editAction}
+          onClose={() => setEditAction(null)}
+          onSave={saveA}
+          onDelete={editAction.id ? removeA : undefined}
+        />
+      )}
+      {credFor && (
+        <CredentialsModal
+          platform={credFor}
+          credsState={credsState}
+          onClose={() => setCredFor(null)}
+          onSaved={() => notify('Coffre mis à jour ✔')}
+        />
+      )}
     </div>
   );
 }
@@ -336,34 +352,6 @@ function AddPlatform({ onAdd }) {
           {CATS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
         </select>
         <input placeholder="Note (tarif, conditions…)" value={note} onChange={e => setNote(e.target.value)} />
-        <button className="btn" type="submit">Ajouter</button>
-      </form>
-    </details>
-  );
-}
-
-function AddAction({ onAdd }) {
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [phase, setPhase] = useState('p1');
-  const [detail, setDetail] = useState('');
-
-  const submit = (e) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-    onAdd({ title: title.trim(), phase, detail: detail.trim() });
-    setTitle(''); setDetail(''); setOpen(false);
-  };
-
-  return (
-    <details className="addbox" open={open} onToggle={e => setOpen(e.target.open)}>
-      <summary>＋ Ajouter une action</summary>
-      <form onSubmit={submit}>
-        <input required placeholder="Action à faire" value={title} onChange={e => setTitle(e.target.value)} />
-        <select value={phase} onChange={e => setPhase(e.target.value)}>
-          {PHASES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-        </select>
-        <input placeholder="Détail (optionnel)" value={detail} onChange={e => setDetail(e.target.value)} />
         <button className="btn" type="submit">Ajouter</button>
       </form>
     </details>
