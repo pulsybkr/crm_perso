@@ -207,8 +207,9 @@ export default function Home() {
 
   const blockedList = useMemo(() => (platforms || []).filter(p => p.cat === 'bloquees'), [platforms]);
 
-  const viewMain = useMemo(() => (viewPlatforms || []).filter(p => p.cat !== 'bloquees'), [viewPlatforms]);
-  const viewBlocked = useMemo(() => (viewPlatforms || []).filter(p => p.cat === 'bloquees'), [viewPlatforms]);
+  const _vp = Array.isArray(viewPlatforms) ? viewPlatforms : [];
+  const viewMain = useMemo(() => _vp.filter(p => p.cat !== 'bloquees'), [viewPlatforms]);
+  const viewBlocked = useMemo(() => _vp.filter(p => p.cat === 'bloquees'), [viewPlatforms]);
 
   const credsState = {
     configured: vault.configured,
