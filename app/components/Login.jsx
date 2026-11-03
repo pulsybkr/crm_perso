@@ -49,17 +49,17 @@ export default function Login({ setup, onDone }) {
         </label>
         <label>
           {setup ? 'Choisis un code d\'accès' : 'Code d\'accès'}
-          <input required type="password" value={code} onChange={e => setCode(e.target.value)} placeholder="••••" autoComplete="current-password" />
+          <input required type="password" value={code} onChange={e => setCode(e.target.value)} placeholder="••••••" autoComplete="current-password" />
         </label>
         {setup && (
           <label>
             Confirme le code
-            <input required type="password" value={code2} onChange={e => setCode2(e.target.value)} placeholder="••••" />
+            <input required type="password" value={code2} onChange={e => setCode2(e.target.value)} placeholder="••••••" />
           </label>
         )}
         {err && <div className="auth-error">{err}</div>}
         <button className="btn" disabled={busy}>{busy ? '…' : setup ? 'Créer mon compte' : 'Se connecter'}</button>
-        {setup && <p className="auth-note">Le code peut faire 4 caractères ou plus. Tu pourras le changer plus tard.</p>}
+        {setup && <p className="auth-note">Le code doit faire 6 caractères ou plus. Tu pourras le changer plus tard.</p>}
       </form>
     </div>
   );

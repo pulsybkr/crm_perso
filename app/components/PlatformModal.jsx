@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { P_STATUSES, CATS, CONGO_STATUSES } from '../lib/kb.js';
+import { P_STATUSES, CATS, CONGO_STATUSES, HIDDEN_CAT, parseGain } from '../lib/kb.js';
 
 /**
  * Modale d'édition d'une plateforme : statut, catégorie, URL, note officielle,
@@ -13,10 +13,11 @@ export default function PlatformModal({ platform, onClose, onSave, onDelete, onC
   const [url, setUrl] = useState(platform.url || '');
   const [cat, setCat] = useState(platform.cat || 'ia');
   const [status, setStatus] = useState(platform.status || 'pas_inscrit');
-  const [congo, setCongo] = useState(platform.congo || (platform.cat === 'bloquees' ? 'non' : 'ok'));
+  const [congo, setCongo] = useState(platform.congo || (platform.cat === HIDDEN_CAT ? 'non' : 'ok'));
   const [note, setNote] = useState(platform.note || '');
   const [unote, setUnote] = useState(platform.unote || '');
   const [gain, setGain] = useState(platform.gain || '');
+  const [err, setErr] = useState('');
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -27,10 +28,17 @@ export default function PlatformModal({ platform, onClose, onSave, onDelete, onC
   const submit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
+    setErr('');
+    const rawGain = String(gain ?? '').trim();
+    /* même règle que le serveur : une virgule décimale est acceptée, le reste non */
+    if (rawGain && parseGain(rawGain) === 0 && !/^[-+]?0*(?:[.,]0+)?$/.test(rawGain)) {
+      setErr('Gain invalide : indique un nombre (ex : 12,50).');
+      return;
+    }
     onSave({
       ...platform,
       name: name.trim(), url: url.trim(), cat, status, congo, note: note.trim(),
-      unote: unote.trim(), gain: String(gain || '')
+      unote: unote.trim(), gain: rawGain ? String(parseGain(rawGain)) : ''
     });
   };
 
@@ -80,7 +88,7 @@ export default function PlatformModal({ platform, onClose, onSave, onDelete, onC
           </label>
           <label>
             €/mois encaissé le mois dernier
-            <input type="number" min="0" value={gain} onChange={e => setGain(e.target.value)} placeholder="0" />
+            <input type="number" min="0" step="0.01" value={gain} onChange={e => setGain(e.target.value)} placeholder="0" />
           </label>
           <label>
             Note officielle (tarifs, conditions…)
@@ -91,6 +99,7 @@ export default function PlatformModal({ platform, onClose, onSave, onDelete, onC
             <textarea rows={2} value={unote} onChange={e => setUnote(e.target.value)} placeholder="Date d'inscription, évaluations passées…" />
           </label>
           <div className="modal-foot">
+          {err && <p className="vault-err" style={{ width: '100%' }}>{err}</p>}
           {!isNew
             ? <div className="modal-foot-left">
                 {onCreds && <button type="button" className="vaultbtn big" onClick={() => onCreds(platform)}>🔐 Identifiants</button>}

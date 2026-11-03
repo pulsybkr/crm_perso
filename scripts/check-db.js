@@ -1,7 +1,7 @@
 'use strict';
 /** Statistiques rapides de la base. */
 require('dotenv').config({ path: '.env.local', quiet: true });
-const { listPlatforms, listActions, getStats, lastSnapshot, listUsers, listUserSummaries, DB_PATH } = require('../lib/db.js');
+const { listPlatforms, listActions, getStats, lastSnapshot, listUsers, listUserSummaries, DB_PATH, pool } = require('../lib/db.js');
 (async () => {
   const ps = await listPlatforms(), as = await listActions(), st = await getStats();
   console.log(`DB: ${DB_PATH}`);
@@ -18,4 +18,5 @@ const { listPlatforms, listActions, getStats, lastSnapshot, listUsers, listUserS
   console.log(`Actions: ${as.filter(a => a.status === 'fait').length} faites / ${as.filter(a => a.status === 'en_cours').length} en cours / ${as.filter(a => a.status === 'a_faire').length} à faire`);
   const last = await lastSnapshot();
   if (last) console.log(`Dernier snapshot: ${last.file} (${last.created_at})`);
-})();
+  await pool().end();
+})().catch(e => { console.error('Lecture impossible :', e.message); process.exit(1); });

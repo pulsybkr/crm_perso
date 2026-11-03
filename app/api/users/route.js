@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
-import { listUserSummaries, createUser, updateUser, deleteUser, getUser } from '@/lib/db.js';
-import { requireAdmin } from '@/lib/auth.js';
+import { listUserSummaries, createUser, updateUser, deleteUser, getUser, countUserAccounts } from '@/lib/db.js';
+import { requireAdmin, statusOf } from '@/lib/auth.js';
 
 export const dynamic = 'force-dynamic';
 
 const bad = (msg, code = 400) => NextResponse.json({ error: msg }, { status: code });
+const fail = (e, fallback = 422) => {
+  const code = statusOf(e, fallback);
+  return bad(code >= 500 ? 'Erreur serveur' : e.message, code);
+};
 
 /* GET /api/users → résumé d'avancement de chaque personne (admin). */
 export async function GET() {
@@ -12,7 +16,7 @@ export async function GET() {
     await requireAdmin();
     return NextResponse.json(await listUserSummaries());
   } catch (e) {
-    return bad(e.message, e.status || 500);
+    return bad(statusOf(e) === 500 ? 'Erreur serveur' : e.message, statusOf(e));
   }
 }
 
@@ -25,11 +29,12 @@ export async function POST(req) {
     const { user, code } = await createUser({ name: b.name, code: b.code || undefined, role: b.role === 'admin' ? 'admin' : 'member' });
     return NextResponse.json({ user, code }, { status: 201 });
   } catch (e) {
-    return bad(e.message, e.status || (String(e.message).includes('déjà pris') || String(e.message).includes('trop') ? 422 : 500));
+    return fail(e);
   }
 }
 
-/* PATCH /api/users → renommer, changer le code, réinitialiser, changer le rôle. */
+/* PATCH /api/users → renommer, changer le code, réinitialiser, changer le rôle.
+   Un membre peut uniquement modifier son propre code (via /api/auth/code). */
 export async function PATCH(req) {
   try {
     const me = await requireAdmin();
@@ -44,7 +49,7 @@ export async function PATCH(req) {
     const { user, code } = await updateUser(b.id, patch);
     return NextResponse.json({ user, code });
   } catch (e) {
-    return bad(e.message, e.status || 422);
+    return fail(e);
   }
 }
 
@@ -56,10 +61,11 @@ export async function DELETE(req) {
     const id = searchParams.get('id');
     if (!id) return bad('id requis', 422);
     if (id === me.id) return bad('Impossible de supprimer son propre compte', 422);
-    if (!getUser(id)) return bad('utilisateur introuvable', 404);
+    if (!(await getUser(id))) return bad('utilisateur introuvable', 404);
+    const accounts = await countUserAccounts(id);
     await deleteUser(id);
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, accountsRemoved: accounts });
   } catch (e) {
-    return bad(e.message, e.status || 500);
+    return fail(e, 500);
   }
 }

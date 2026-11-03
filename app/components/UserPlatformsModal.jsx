@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { CATS, CONGO_STATUSES } from '../lib/kb.js';
+import { CATS, CONGO_STATUSES, HIDDEN_CAT } from '../lib/kb.js';
 
 const CAT_LABEL = Object.fromEntries(CATS.map(c => [c.id, c.label]));
 
@@ -53,7 +53,7 @@ export default function UserPlatformsModal({ user, onClose, onSaved }) {
 
   const selectAll = () => setSel(new Set((rows || []).map(p => p.id)));
   const selectNone = () => setSel(new Set());
-  const selectActive = () => setSel(new Set((rows || []).filter(p => p.cat !== 'bloquees').map(p => p.id)));
+  const selectActive = () => setSel(new Set((rows || []).filter(p => p.cat !== HIDDEN_CAT).map(p => p.id)));
   const selectCongo = () => setSel(new Set((rows || []).filter(p => p.congo === 'ok').map(p => p.id)));
 
   const save = async () => {
@@ -75,8 +75,8 @@ export default function UserPlatformsModal({ user, onClose, onSaved }) {
     }
   };
 
-  const activeCount = (rows || []).filter(p => p.cat !== 'bloquees').length;
-  const allowedActive = (rows || []).filter(p => p.cat !== 'bloquees' && sel.has(p.id)).length;
+  const activeCount = (rows || []).filter(p => p.cat !== HIDDEN_CAT).length;
+  const allowedActive = (rows || []).filter(p => p.cat !== HIDDEN_CAT && sel.has(p.id)).length;
 
   return (
     <div className="modal-back" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -105,7 +105,7 @@ export default function UserPlatformsModal({ user, onClose, onSaved }) {
           {!rows && !err && <p className="kb-hint">Chargement…</p>}
           {err && <div className="auth-error">{err}</div>}
           {filtered.map(p => (
-            <label className={'upm-row' + (p.cat === 'bloquees' ? ' off' : '')} key={p.id}>
+            <label className={'upm-row' + (p.cat === HIDDEN_CAT ? ' off' : '')} key={p.id}>
               <input type="checkbox" checked={sel.has(p.id)} onChange={() => toggle(p.id)} />
               <span className="upm-name">{p.name}</span>
               <span className="upm-tags">

@@ -9,9 +9,10 @@ import { useState, useEffect } from 'react';
  *   Ajouter / modifier / supprimer un compte, + lien de connexion de la plateforme.
  */
 export default function CredentialsModal({ platform, onClose, credsState, onSaved }) {
-  const { configured, unlocked, master, setMaster: setGlobalMaster, lock } = credsState;
+  const { configured, unlocked, setMaster: setGlobalMaster, lock } = credsState;
   const [masterInput, setMasterInput] = useState('');
   const [master2, setMaster2] = useState('');
+  const [vaultToken, setVaultToken] = useState('');
   const [err, setErr] = useState('');
   const [loginUrl, setLoginUrl] = useState(platform.login_url || platform.url || '');
   const [accounts, setAccounts] = useState(null);   // [{ id, label, username, password, cnote }]
@@ -24,27 +25,32 @@ export default function CredentialsModal({ platform, onClose, credsState, onSave
       ...opts,
       headers: {
         'Content-Type': 'application/json',
-        ...(master ? { 'x-master': master } : {}),
+        /* Le maître reste en mémoire du composant ; le serveur ne renvoie qu'un jeton court. */
+        ...(vaultToken ? { 'x-vault-token': vaultToken } : {}),
         ...(opts.headers || {})
       }
     });
     const j = await r.json().catch(() => ({}));
+    if (r.status === 423) {
+      setVaultToken('');
+      setGlobalMaster('', false);
+      throw new Error('Coffre verrouillé — déverrouille à nouveau.');
+    }
     if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    if (j && typeof j.token === 'string' && path.endsWith('/credentials')) setVaultToken(j.token);
     return j;
   };
 
-  const load = async (m) => {
+  const load = async () => {
     setErr('');
-    const list = await api('/api/credentials?platform=' + encodeURIComponent(platform.id), {
-      headers: { 'x-master': m }
-    });
+    const list = await api('/api/credentials?platform=' + encodeURIComponent(platform.id));
     setAccounts(list);
   };
 
   useEffect(() => {
-    if (configured && unlocked && master) load(master).catch(e => setErr(e.message));
+    if (configured && unlocked && vaultToken) load().catch(e => setErr(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [configured, unlocked]);
+  }, [configured, unlocked, vaultToken]);
 
   /* ---- 1. Premier lancement : créer le maître ---- */
   if (!configured) {
@@ -58,19 +64,21 @@ export default function CredentialsModal({ platform, onClose, credsState, onSave
           <form onSubmit={async (e) => {
             e.preventDefault();
             setErr('');
-            if (masterInput.length < 6) return setErr('6 caractères minimum.');
+            if (masterInput.length < 8) return setErr('8 caractères minimum.');
             if (masterInput !== master2) return setErr('Les deux mots de passe diffèrent.');
             setBusy(true);
             try {
-              await api('/api/credentials', { method: 'POST', body: JSON.stringify({ master: masterInput }) });
-              setGlobalMaster(masterInput, true);
-              await load(masterInput);
+              const r = await api('/api/credentials', { method: 'POST', body: JSON.stringify({ master: masterInput }) });
+              if (r.token) setVaultToken(r.token);
+              setGlobalMaster('', true);
+              await load();
             } catch (ex) { setErr(ex.message); }
             setBusy(false);
           }}>
             <p className="vault-hint">
               Ce mot de passe maître chiffre (AES-256-GCM) tous les identifiants.
               Il n&apos;est stocké nulle part. <b>Si tu le perds, tout est irrécupérable.</b>
+              8 caractères minimum.
             </p>
             <label>
               Mot de passe maître
@@ -107,10 +115,13 @@ export default function CredentialsModal({ platform, onClose, credsState, onSave
             e.preventDefault();
             setErr(''); setBusy(true);
             try {
-              await load(masterInput);
-              setGlobalMaster(masterInput, true);
+              const r = await api('/api/credentials', { method: 'POST', body: JSON.stringify({ master: masterInput, unlock: true }) });
+              if (!r.token) throw new Error('Déverrouillage impossible.');
+              setVaultToken(r.token);
+              setGlobalMaster('', true);
+              setMasterInput('');
             } catch (ex) {
-              setErr(ex.message.includes('invalide') || ex.message.includes('423') ? 'Mot de passe maître incorrect.' : ex.message);
+              setErr(/invalide|401/.test(ex.message) ? 'Mot de passe maître incorrect.' : ex.message);
             }
             setBusy(false);
           }}>
@@ -145,7 +156,7 @@ export default function CredentialsModal({ platform, onClose, credsState, onSave
           password: a.password, cnote: a.cnote
         })
       });
-      await load(master);
+      await load();
       setEditing(null);
       onSaved && onSaved();
     } catch (ex) { setErr(ex.message); }
@@ -154,9 +165,12 @@ export default function CredentialsModal({ platform, onClose, credsState, onSave
 
   const delAccount = async (a) => {
     if (!window.confirm('Supprimer le compte « ' + (a.label || a.username) + ' » ?')) return;
-    await api('/api/credentials?account=' + encodeURIComponent(a.id), { method: 'DELETE' });
-    await load(master);
-    onSaved && onSaved();
+    setErr('');
+    try {
+      await api('/api/credentials?account=' + encodeURIComponent(a.id), { method: 'DELETE' });
+      await load();
+      onSaved && onSaved();
+    } catch (ex) { setErr(ex.message); }
   };
 
   return (
@@ -165,7 +179,7 @@ export default function CredentialsModal({ platform, onClose, credsState, onSave
         <div className="modal-head">
           <h3>🔐 Comptes — {platform.name}</h3>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button className="btn ghost sm" onClick={lock}>🔒 Verrouiller</button>
+            <button className="btn ghost sm" onClick={() => { setVaultToken(''); lock(); }}>🔒 Verrouiller</button>
             <button className="modal-x" onClick={onClose}>✕</button>
           </div>
         </div>

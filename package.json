@@ -1,14 +1,16 @@
 {
   "name": "suivi-brazza",
-  "version": "2.5.0",
+  "version": "3.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "db:reset": "node scripts/init-db.js --reset",
+    "db:migrate": "node scripts/migrate.js",
+    "db:verify": "node scripts/verify.js",
     "db:check": "node scripts/check-db.js",
-    "db:snapshot": "node scripts/snapshot.js"
+    "db:snapshot": "node scripts/snapshot.js",
+    "db:purge": "node scripts/purge-sessions.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

@@ -32,9 +32,26 @@ export const CATS = [
   { id: 'micro',   label: '⚙️ Micro-tâches' },
   { id: 'free',    label: '💼 Freelance' },
   { id: 'tuto',    label: '🎓 Tutorat' },
-  { id: 'transc',  label: '📝 Transcription & sous-titrage' }
+  { id: 'transc',  label: '📝 Transcription & sous-titrage' },
+  /* Catégorie technique : ces plateformes sont masquées du kanban et exclues des stats. */
+  { id: 'bloquees', label: '🚫 Bloquées / hors sujet' }
 ];
 export const CAT_SHORT = {
   ia: '🤖 IA', langues: '🗣️ Langues', agg: '📡 Agg.', qa: '🧪 QA', etudes: '🎯 Études',
-  micro: '⚙️ Micro', free: '💼 Freelance', tuto: '🎓 Tutorat', transc: '📝 Transc.'
+  micro: '⚙️ Micro', free: '💼 Freelance', tuto: '🎓 Tutorat', transc: '📝 Transc.',
+  bloquees: '🚫 Bloquées'
 };
+
+/** Catégorie technique exclue des stats et du kanban principal. */
+export const HIDDEN_CAT = 'bloquees';
+
+/**
+ * Normalise un gain saisi côté client EXACTEMENT comme le serveur :
+ * « 12,50 » et « 12.50 » valent 12.5 ; toute autre valeur vaut 0.
+ */
+export function parseGain(value) {
+  const raw = String(value ?? '').trim().replace(/\s|€/g, '').replace(',', '.');
+  if (!/^-?\d+(\.\d+)?$/.test(raw)) return 0;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}

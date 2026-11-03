@@ -8,7 +8,7 @@ import PlatformModal from './components/PlatformModal.jsx';
 import CredentialsModal from './components/CredentialsModal.jsx';
 import Login from './components/Login.jsx';
 import Team from './components/Team.jsx';
-import { P_STATUSES, A_STATUSES, CATS } from './lib/kb.js';
+import { P_STATUSES, A_STATUSES, CATS, HIDDEN_CAT, parseGain } from './lib/kb.js';
 
 /* ================= Constantes ================= */
 const PHASES = [
@@ -25,7 +25,12 @@ async function api(path, opts) {
     ...opts,
     headers: { 'Content-Type': 'application/json', ...(opts?.headers || {}) }
   });
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || ('HTTP ' + r.status));
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    const e = new Error(j.error || ('HTTP ' + r.status));
+    e.status = r.status;
+    throw e;
+  }
   return r.json();
 }
 const getPlatforms = () => api('/api/platforms');
@@ -73,7 +78,7 @@ export default function Home() {
   const [credFor, setCredFor] = useState(null);         // CredentialsModal (plateforme)
 
   /* Coffre : maître en mémoire uniquement */
-  const [vault, setVault] = useState({ configured: false, unlocked: false, master: null });
+  const [vault, setVault] = useState({ configured: false, unlocked: false });
 
   const dq = useDebounced(q, 250);
 
@@ -133,7 +138,7 @@ export default function Home() {
   };
 
   const notify = (msg) => { setFlash(msg); setTimeout(() => setFlash(''), 2600); };
-  const snapNow = () => postSnapshot().then(s => setSnap(s.file || '—')).catch(() => { });
+  const snapNow = () => postSnapshot().then(s => s.file && setSnap(s.file)).catch(() => { });
 
   /* ---- Plateformes ---- */
   const patchP = (id, fields) => {
@@ -185,11 +190,12 @@ export default function Home() {
   /* ---- Stats ---- */
   const stats = useMemo(() => {
     if (!platforms) return null;
-    const main = platforms.filter(p => p.cat !== 'bloquees');
+    const main = platforms.filter(p => p.cat !== HIDDEN_CAT);
     const s = { total: main.length, gain: 0 };
     Object.keys(P_STATUSES).forEach(k => { s[k] = main.filter(p => p.status === k).length; });
     s.congoOk = main.filter(p => p.congo === 'ok').length;
-    s.gain = main.reduce((acc, p) => acc + (parseFloat(p.gain) || 0), 0);
+    /* même normalisation que le serveur (client et API doivent afficher le même total) */
+    s.gain = Math.round(main.reduce((acc, p) => acc + parseGain(p.gain), 0) * 100) / 100;
     return s;
   }, [platforms]);
 
@@ -197,7 +203,7 @@ export default function Home() {
     if (!platforms) return [];
     const needle = dq.trim().toLowerCase();
     return platforms.filter(p => {
-      if (p.cat === 'bloquees') return false;
+      if (p.cat === HIDDEN_CAT) return false;
       if (filter !== 'all' && p.status !== filter) return false;
       if (cat !== 'all' && p.cat !== cat) return false;
       if (needle && !((p.name + ' ' + p.note + ' ' + p.unote).toLowerCase().includes(needle))) return false;
@@ -205,18 +211,17 @@ export default function Home() {
     });
   }, [platforms, filter, cat, dq]);
 
-  const blockedList = useMemo(() => (platforms || []).filter(p => p.cat === 'bloquees'), [platforms]);
+  const blockedList = useMemo(() => (platforms || []).filter(p => p.cat === HIDDEN_CAT), [platforms]);
 
   const _vp = Array.isArray(viewPlatforms) ? viewPlatforms : [];
-  const viewMain = useMemo(() => _vp.filter(p => p.cat !== 'bloquees'), [viewPlatforms]);
-  const viewBlocked = useMemo(() => _vp.filter(p => p.cat === 'bloquees'), [viewPlatforms]);
+  const viewMain = useMemo(() => _vp.filter(p => p.cat !== HIDDEN_CAT), [viewPlatforms]);
+  const viewBlocked = useMemo(() => _vp.filter(p => p.cat === HIDDEN_CAT), [viewPlatforms]);
 
   const credsState = {
     configured: vault.configured,
     unlocked: vault.unlocked,
-    master: vault.master,
-    setMaster: (m, unlocked) => setVault(v => ({ ...v, master: m, unlocked })),
-    lock: () => setVault(v => ({ ...v, master: null, unlocked: false }))
+    setMaster: (_m, unlocked) => setVault(v => ({ ...v, unlocked })),
+    lock: () => setVault(v => ({ ...v, unlocked: false }))
   };
 
   if (!authReady) return <div className="loading">Chargement…</div>;
@@ -239,7 +244,7 @@ export default function Home() {
         <div className="headrow">
           <div>
             <h1>🇨🇬 Suivi Brazza</h1>
-            <p className="sub">Next.js + SQLite · coffre-fort AES-256 · sauvegarde auto</p>
+            <p className="sub">Next.js + PostgreSQL (Neon) · coffre-fort AES-256 · sauvegarde auto</p>
           </div>
           <div className="snap">
             <span className="who">👤 <b>{me.name}</b>
@@ -247,15 +252,16 @@ export default function Home() {
               <button className="btn ghost sm" onClick={async () => {
                  const c = window.prompt('Nouveau code (6 caractères min) :');
                  if (!c) return;
-                 try { await api('/api/auth/code', { method: 'POST', body: JSON.stringify({ code: c }) }); alert('Code modifié ✔'); }
+                 if (c.length < 6) { alert('Code trop court (6 caractères minimum).'); return; }
+                 try { await api('/api/auth/code', { method: 'POST', body: JSON.stringify({ code: c }) }); alert('Code modifié ✔ — tes autres sessions ont été fermées.'); }
                  catch (e) { alert(e.message); }
                }} title="Changer mon code">🔑 Code</button>
                <button className="btn ghost sm" onClick={logout} title="Fermer la session">Déconnexion</button>
             </span>
             💾 <code>{snap}</code>
-            {me.role === 'admin' && vault.configured && (
+            {me.role === 'admin' && vault.configured && vault.unlocked && (
               <button className="btn ghost sm" onClick={credsState.lock} title="Verrouiller le coffre">
-                {vault.unlocked ? '🔒 Verrouiller' : '🔐 Coffre'}
+                🔒 Verrouiller
               </button>
             )}
           </div>
@@ -296,7 +302,7 @@ export default function Home() {
                 <span className="chip money">💰 {stats.gain} €/mois encaissés · {stats.avec_missions} avec missions · {stats.en_cours} en cours</span>
                 <span className="chip congo">🇨🇬 {stats.congoOk} accessibles depuis le Congo</span>
               </div>
-              {platforms.filter(p => p.cat !== 'bloquees').length === 0 && (
+              {platforms.filter(p => p.cat !== HIDDEN_CAT).length === 0 && (
                 <div className="view-banner">
                   🚫 Aucun site ne t&apos;a encore été attribué. Demande à l&apos;administrateur de t&apos;en autoriser.
                 </div>
@@ -352,7 +358,7 @@ export default function Home() {
       )}
 
       <footer>
-        <span className="note">Base : <code>data/suivi-brazza.db</code> · snapshots : <code>data/backups/</code> (40) · coffre : AES-256-GCM</span>
+        <span className="note">Base : <code>PostgreSQL (Neon)</code> · snapshots : table <code>snapshots</code> (40 conservés) · coffre : AES-256-GCM</span>
       </footer>
 
       {/* Modales */}

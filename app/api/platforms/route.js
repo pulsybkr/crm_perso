@@ -3,15 +3,13 @@ import {
   listPlatforms, updateUserPlatform, updatePlatformCatalog,
   createPlatform, deletePlatform, getUser, platformAllowed
 } from '@/lib/db.js';
-import { requireUser, requireAdmin } from '@/lib/auth.js';
+import { requireUser, requireAdmin, statusOf } from '@/lib/auth.js';
 
 export const dynamic = 'force-dynamic';
 
 const bad = (msg, code = 400) => NextResponse.json({ error: msg }, { status: code });
 const STATE_FIELDS = ['status', 'unote', 'gain'];
 const CATALOG_FIELDS = ['name', 'url', 'cat', 'note', 'congo', 'position'];
-
-const isValidationError = (e) => /invalide|requis|trop/i.test(String(e.message));
 
 /* GET /api/platforms → tableau de l'utilisateur connecté.
    ?user=<id> → tableau d'un autre membre, en lecture seule (admin seulement). */
@@ -22,12 +20,14 @@ export async function GET(req) {
     const other = searchParams.get('user');
     if (other && other !== me.id) {
       if (me.role !== 'admin') return bad('Accès réservé à l\'administrateur', 403);
-      if (!getUser(other)) return bad('utilisateur introuvable', 404);
-      return NextResponse.json(listPlatforms(other));
+      if (!(await getUser(other))) return bad('utilisateur introuvable', 404);
+      // vue admin : même périmètre que celui de la personne (statistiques cohérentes)
+      const target = await getUser(other);
+      return NextResponse.json(await listPlatforms(other, { all: target.role === 'admin' }));
     }
     return NextResponse.json(await listPlatforms(me.id, { all: me.role === 'admin' }));
   } catch (e) {
-    return bad(e.message, e.status || 500);
+    return bad(statusOf(e) === 500 ? 'Erreur serveur' : e.message, statusOf(e));
   }
 }
 
@@ -37,13 +37,14 @@ export async function POST(req) {
     const me = await requireUser();
     const b = await req.json();
     if (!b || !b.name || !String(b.name).trim()) return bad('name requis', 422);
-    const p = createPlatform({
+    const p = await createPlatform({
       name: b.name, url: b.url || '', cat: b.cat || 'ia',
       note: b.note || '', congo: b.congo, status: b.status, userId: me.id
     });
     return NextResponse.json(p, { status: 201 });
   } catch (e) {
-    return bad(e.message, isValidationError(e) ? 422 : 500);
+    const code = statusOf(e, e.status || 400);
+    return bad(code >= 500 ? 'Erreur serveur' : e.message, code);
   }
 }
 
@@ -58,6 +59,7 @@ export async function PATCH(req) {
     const state = {}, catalog = {};
     for (const k of STATE_FIELDS) if (k in b) state[k] = b[k];
     for (const k of CATALOG_FIELDS) if (k in b) catalog[k] = b[k];
+    if (!Object.keys(state).length && !Object.keys(catalog).length) return bad('aucun champ modifiable', 422);
 
     if (Object.keys(catalog).length) {
       if (me.role !== 'admin') return bad('Seul l\'administrateur peut modifier la fiche commune', 403);
@@ -69,10 +71,10 @@ export async function PATCH(req) {
       }
       await updateUserPlatform(me.id, b.id, state);
     }
-    if (!Object.keys(state).length && !Object.keys(catalog).length) return bad('aucun champ modifiable', 422);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return bad(e.message, isValidationError(e) ? 422 : 500);
+    const code = statusOf(e, e.status || 400);
+    return bad(code >= 500 ? 'Erreur serveur' : e.message, code);
   }
 }
 
@@ -86,6 +88,7 @@ export async function DELETE(req) {
     await deletePlatform(id);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return bad(e.message, e.status || 500);
+    const code = statusOf(e);
+    return bad(code >= 500 ? 'Erreur serveur' : e.message, code);
   }
 }
