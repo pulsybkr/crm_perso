@@ -14,7 +14,7 @@ const guard = async (fn, admin = false) => {
 };
 
 export async function GET() {
-  return guard(async () => NextResponse.json(listActions()));
+  return guard(async () => NextResponse.json(await listActions()));
 }
 
 export async function POST(req) {
@@ -22,7 +22,7 @@ export async function POST(req) {
     try {
       const b = await req.json();
       if (!b || !b.title || !String(b.title).trim()) return bad('title requis');
-      const a = createAction({ phase: b.phase || 'p1', title: b.title, detail: b.detail || '' });
+      const a = await createAction({ phase: b.phase || 'p1', title: b.title, detail: b.detail || '' });
       return NextResponse.json(a, { status: 201 });
     } catch (e) {
       return bad(e.message, 500);
@@ -40,7 +40,7 @@ export async function PATCH(req) {
       const fields = {};
       for (const k of allowed) if (k in b) fields[k] = b[k];
       if (!Object.keys(fields).length) return bad('aucun champ modifiable');
-      const r = updateAction(b.id, fields);
+      const r = await updateAction(b.id, fields);
       if (!r || r.changes === 0) return bad('action introuvable', 404);
       return NextResponse.json({ ok: true });
     } catch (e) {
@@ -55,7 +55,7 @@ export async function DELETE(req) {
       const { searchParams } = new URL(req.url);
       const id = searchParams.get('id');
       if (!id) return bad('id requis');
-      const r = deleteAction(id);
+      const r = await deleteAction(id);
       if (r.changes === 0) return bad('action introuvable', 404);
       return NextResponse.json({ ok: true });
     } catch (e) {

@@ -11,7 +11,7 @@ export async function POST(req) {
     if (!b || !b.name || !b.code) {
       return NextResponse.json({ error: 'Nom et code d\'accès requis' }, { status: 422 });
     }
-    const user = login(b.name, b.code);
+    const user = await login(b.name, b.code);
     if (!user) {
       return NextResponse.json({ error: 'Nom ou code d\'accès incorrect' }, { status: 401 });
     }

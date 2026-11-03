@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 /* POST /api/auth/setup → crée le premier compte (admin) et reprend le tableau existant. */
 export async function POST(req) {
   try {
-    if (countUsers() > 0) {
+    if (await countUsers() > 0) {
       return NextResponse.json({ error: 'La configuration a déjà été faite' }, { status: 409 });
     }
     const b = await req.json();
@@ -17,7 +17,7 @@ export async function POST(req) {
     if (String(b.code).length < 4) {
       return NextResponse.json({ error: 'Code trop court (4 caractères minimum)' }, { status: 422 });
     }
-    const user = setupAdmin({ name: b.name, code: b.code });
+    const user = await setupAdmin({ name: b.name, code: b.code });
     await signIn(user.id);
     return NextResponse.json({ ok: true, user }, { status: 201 });
   } catch (e) {

@@ -3,7 +3,7 @@ import {
   isConfigured, setMaster, verifyMaster,
   encryptWithMaster, decryptWithMaster
 } from '@/lib/crypto.js';
-import { db } from '@/lib/db.js';
+import { pool as getPool } from '@/lib/db.js';
 import { requireAdmin } from '@/lib/auth.js';
 
 export const dynamic = 'force-dynamic';
@@ -20,15 +20,16 @@ const needMaster = (req) => {
 
 const deny = (e) => NextResponse.json({ error: e.message }, { status: e.status || 401 });
 
+const nowSql = "to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')";
+
 /* ============ Coffre ============ */
 
-/* GET → état du coffre · ?ids=1 → platform_id ayant des comptes · ?platform=xxx → comptes décryptés */
 export async function GET(req) {
   try { await requireAdmin(); } catch (e) { return deny(e); }
   const { searchParams } = new URL(req.url);
 
   if (searchParams.get('ids') === '1') {
-    const rows = db().prepare('SELECT DISTINCT platform_id FROM accounts').all();
+    const { rows } = await getPool().query('SELECT DISTINCT platform_id FROM accounts');
     return NextResponse.json(rows.map(r => r.platform_id));
   }
 
@@ -36,7 +37,7 @@ export async function GET(req) {
   if (pid) {
     const master = needMaster(req);
     if (!master) return bad('coffre verrouillé ou maître invalide', 423);
-    const rows = db().prepare('SELECT id, label, username, secret, cnote, position FROM accounts WHERE platform_id = ? ORDER BY position, id').all(pid);
+    const { rows } = await getPool().query('SELECT id, label, username, secret, cnote, position FROM accounts WHERE platform_id = $1 ORDER BY position, id', [pid]);
     return NextResponse.json(rows.map(r => {
       let password = '';
       try { password = decryptWithMaster(master, r.secret); } catch { password = '⚠️ illisible'; }
@@ -45,11 +46,11 @@ export async function GET(req) {
     }));
   }
 
-  const count = db().prepare('SELECT COUNT(*) AS c FROM accounts').get().c;
+  const { rows: crow } = await getPool().query('SELECT COUNT(*)::int AS c FROM accounts');
+  const count = crow[0].c;
   return NextResponse.json({ configured: isConfigured(), count });
 }
 
-/* POST → définir le maître (première fois) ou le changer (rechiffre tout) */
 export async function POST(req) {
   try {
     await requireAdmin();
@@ -58,16 +59,18 @@ export async function POST(req) {
     if (String(b.master).length < 6) return bad('mot de passe maître : 6 caractères minimum', 422);
     if (isConfigured()) {
       if (!verifyMaster(b.oldMaster || '')) return bad('ancien mot de passe maître invalide', 401);
-      const rows = db().prepare('SELECT id, secret FROM accounts').all();
-      const tx = db().transaction(() => {
-        rows.forEach(r => {
+      const { rows } = await getPool().query('SELECT id, secret FROM accounts');
+      const client = await getPool().connect();
+      try {
+        await client.query('BEGIN');
+        for (const r of rows) {
           const plain = decryptWithMaster(b.oldMaster, r.secret);
-          db().prepare("UPDATE accounts SET secret = ?, updated_at = datetime('now') WHERE id = ?")
-            .run(encryptWithMaster(b.master, plain), r.id);
-        });
-        setMaster(b.master);
-      });
-      tx();
+          await client.query(`UPDATE accounts SET secret = $1, updated_at = ${nowSql} WHERE id = $2`, [encryptWithMaster(b.master, plain), r.id]);
+        }
+        await client.query('COMMIT');
+      } catch (e) { await client.query('ROLLBACK'); throw e; }
+      finally { client.release(); }
+      setMaster(b.master);
       return NextResponse.json({ ok: true, reencrypted: rows.length });
     }
     setMaster(b.master);
@@ -77,10 +80,6 @@ export async function POST(req) {
   }
 }
 
-/* ============ Comptes ============ */
-
-/* PUT → créer OU mettre à jour un compte.
-   body: { platformId, id?, label?, username?, password?, cnote?, loginUrl? } */
 export async function PUT(req) {
   try {
     await requireAdmin();
@@ -89,45 +88,41 @@ export async function PUT(req) {
     const master = needMaster(req);
     if (!master) return bad('coffre verrouillé ou maître invalide', 423);
 
-    // loginUrl facultatif → mis sur la plateforme
     if (b.loginUrl !== undefined) {
-      db().prepare("UPDATE platforms SET login_url = ?, updated_at = datetime('now') WHERE id = ?")
-        .run(String(b.loginUrl || ''), b.platformId);
+      await getPool().query(`UPDATE platforms SET login_url = $1, updated_at = ${nowSql} WHERE id = $2`, [String(b.loginUrl || ''), b.platformId]);
     }
 
     if (b.id) {
-      const cur = db().prepare('SELECT * FROM accounts WHERE id = ?').get(b.id);
-      if (!cur) return bad('compte introuvable', 404);
+      const { rows: cur } = await getPool().query('SELECT * FROM accounts WHERE id = $1', [b.id]);
+      if (!cur[0]) return bad('compte introuvable', 404);
+      const c = cur[0];
       const secret = ('password' in b && b.password !== '') ? encryptWithMaster(master, String(b.password)) : null;
       if (secret !== null) {
-        db().prepare("UPDATE accounts SET label = ?, username = ?, secret = ?, cnote = ?, updated_at = datetime('now') WHERE id = ?")
-          .run(b.label ?? cur.label, b.username ?? cur.username, secret, b.cnote ?? cur.cnote, b.id);
+        await getPool().query(`UPDATE accounts SET label = $1, username = $2, secret = $3, cnote = $4, updated_at = ${nowSql} WHERE id = $5`,
+          [b.label ?? c.label, b.username ?? c.username, secret, b.cnote ?? c.cnote, b.id]);
       } else {
-        db().prepare("UPDATE accounts SET label = ?, username = ?, cnote = ?, updated_at = datetime('now') WHERE id = ?")
-          .run(b.label ?? cur.label, b.username ?? cur.username, b.cnote ?? cur.cnote, b.id);
+        await getPool().query(`UPDATE accounts SET label = $1, username = $2, cnote = $3, updated_at = ${nowSql} WHERE id = $4`,
+          [b.label ?? c.label, b.username ?? c.username, b.cnote ?? c.cnote, b.id]);
       }
       return NextResponse.json({ ok: true, id: b.id });
     }
 
-    db().prepare('INSERT INTO accounts (id, platform_id, label, username, secret, cnote, position) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(
-        'c-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-        b.platformId, b.label || 'Compte', b.username || '',
-        encryptWithMaster(master, String(b.password || '')), b.cnote || '',
-        db().prepare('SELECT COALESCE(MAX(position), -1) AS m FROM accounts WHERE platform_id = ?').get(b.platformId).m + 1
-      );
+    const { rows: mr } = await getPool().query('SELECT COALESCE(MAX(position), -1) AS m FROM accounts WHERE platform_id = $1', [b.platformId]);
+    const max = mr[0].m + 1;
+    const id = 'c-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    await getPool().query('INSERT INTO accounts (id, platform_id, label, username, secret, cnote, position) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [id, b.platformId, b.label || 'Compte', b.username || '', encryptWithMaster(master, String(b.password || '')), b.cnote || '', max]);
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (e) {
     return bad(e.message, 500);
   }
 }
 
-/* DELETE → supprimer un compte (?account=xxx) */
 export async function DELETE(req) {
   try { await requireAdmin(); } catch (e) { return deny(e); }
   const { searchParams } = new URL(req.url);
   const aid = searchParams.get('account');
   if (!aid) return bad('account requis');
-  const r = db().prepare('DELETE FROM accounts WHERE id = ?').run(aid);
-  return NextResponse.json({ ok: true, deleted: r.changes });
+  const r = await getPool().query('DELETE FROM accounts WHERE id = $1', [aid]);
+  return NextResponse.json({ ok: true, deleted: r.rowCount });
 }

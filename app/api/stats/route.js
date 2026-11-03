@@ -12,10 +12,10 @@ export async function GET(req) {
     const other = searchParams.get('user');
     if (other && other !== me.id) {
       if (me.role !== 'admin') return NextResponse.json({ error: 'Accès réservé à l\'administrateur' }, { status: 403 });
-      if (!getUser(other)) return NextResponse.json({ error: 'utilisateur introuvable' }, { status: 404 });
-      return NextResponse.json(getStats(other));
+      if (!(await getUser(other))) return NextResponse.json({ error: 'utilisateur introuvable' }, { status: 404 });
+      return NextResponse.json(await getStats(other));
     }
-    return NextResponse.json(getStats(me.id, { all: me.role === 'admin' }));
+    return NextResponse.json(await getStats(me.id, { all: me.role === 'admin' }));
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: e.status || 500 });
   }

@@ -7,5 +7,5 @@ export const dynamic = 'force-dynamic';
 /* GET /api/auth/me → { user, setup } ; setup=true au tout premier lancement. */
 export async function GET() {
   const user = await currentUser();
-  return NextResponse.json({ user, setup: countUsers() === 0 });
+  return NextResponse.json({ user, setup: (await countUsers()) === 0 });
 }

@@ -13,9 +13,9 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('user');
     if (!id) return bad('user requis', 422);
-    const user = getUser(id);
+    const user = await getUser(id);
     if (!user) return bad('utilisateur introuvable', 404);
-    return NextResponse.json({ user, platforms: listPlatformAccess(id) });
+    return NextResponse.json({ user, platforms: await listPlatformAccess(id) });
   } catch (e) {
     return bad(e.message, e.status || 500);
   }
@@ -28,10 +28,10 @@ export async function PUT(req) {
     const b = await req.json();
     if (!b || !b.userId) return bad('userId requis', 422);
     if (!Array.isArray(b.platformIds)) return bad('platformIds doit être un tableau', 422);
-    const user = getUser(b.userId);
+    const user = await getUser(b.userId);
     if (!user) return bad('utilisateur introuvable', 404);
     if (user.role === 'admin') return bad('Un administrateur voit toujours tous les sites', 422);
-    const counts = setUserPlatforms(b.userId, b.platformIds);
+    const counts = await setUserPlatforms(b.userId, b.platformIds);
     return NextResponse.json({ ok: true, ...counts });
   } catch (e) {
     return bad(e.message, e.status || 500);

@@ -25,7 +25,7 @@ export async function GET(req) {
       if (!getUser(other)) return bad('utilisateur introuvable', 404);
       return NextResponse.json(listPlatforms(other));
     }
-    return NextResponse.json(listPlatforms(me.id, { all: me.role === 'admin' }));
+    return NextResponse.json(await listPlatforms(me.id, { all: me.role === 'admin' }));
   } catch (e) {
     return bad(e.message, e.status || 500);
   }
@@ -61,13 +61,13 @@ export async function PATCH(req) {
 
     if (Object.keys(catalog).length) {
       if (me.role !== 'admin') return bad('Seul l\'administrateur peut modifier la fiche commune', 403);
-      updatePlatformCatalog(b.id, catalog);
+      await updatePlatformCatalog(b.id, catalog);
     }
     if (Object.keys(state).length) {
-      if (me.role !== 'admin' && !platformAllowed(me.id, b.id)) {
+      if (me.role !== 'admin' && !(await platformAllowed(me.id, b.id))) {
         return bad('Cette plateforme ne t\'est pas autorisée', 403);
       }
-      updateUserPlatform(me.id, b.id, state);
+      await updateUserPlatform(me.id, b.id, state);
     }
     if (!Object.keys(state).length && !Object.keys(catalog).length) return bad('aucun champ modifiable', 422);
     return NextResponse.json({ ok: true });
@@ -83,7 +83,7 @@ export async function DELETE(req) {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     if (!id) return bad('id requis', 422);
-    deletePlatform(id);
+    await deletePlatform(id);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return bad(e.message, e.status || 500);

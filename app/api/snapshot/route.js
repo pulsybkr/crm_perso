@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export async function POST() {
   try {
     await requireUser();
-    const file = takeSnapshot();
+    const file = await takeSnapshot();
     return NextResponse.json({ ok: true, file });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message }, { status: e.status || 500 });
@@ -19,7 +19,7 @@ export async function POST() {
 export async function GET() {
   try {
     await requireUser();
-    return NextResponse.json(lastSnapshot());
+    return NextResponse.json(await lastSnapshot());
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: e.status || 500 });
   }
