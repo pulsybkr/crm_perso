@@ -6,6 +6,8 @@ import PlatformKanban from './components/PlatformKanban.jsx';
 import ActionModal from './components/ActionModal.jsx';
 import PlatformModal from './components/PlatformModal.jsx';
 import CredentialsModal from './components/CredentialsModal.jsx';
+import Login from './components/Login.jsx';
+import Team from './components/Team.jsx';
 import { P_STATUSES, A_STATUSES, CATS } from './lib/kb.js';
 
 /* ================= Constantes ================= */
@@ -48,6 +50,9 @@ function useDebounced(value, ms) {
 
 /* ================= App ================= */
 export default function Home() {
+  const [me, setMe] = useState(null);
+  const [setup, setSetup] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
   const [platforms, setPlatforms] = useState(null);
   const [actions, setActions] = useState(null);
   const [tab, setTab] = useState('platforms');
@@ -57,6 +62,10 @@ export default function Home() {
   const [flash, setFlash] = useState('');
   const [snap, setSnap] = useState('—');
   const [loading, setLoading] = useState(true);
+
+  /* Vue admin : kanban d'un membre, en lecture seule */
+  const [viewUser, setViewUser] = useState(null);
+  const [viewPlatforms, setViewPlatforms] = useState(null);
 
   /* Modales */
   const [editAction, setEditAction] = useState(null);   // ActionModal
@@ -69,21 +78,59 @@ export default function Home() {
   const dq = useDebounced(q, 250);
 
   const refresh = useCallback(async () => {
-    const [ps, as, sn, vd, credIds] = await Promise.all([getPlatforms(), getActions(),
-      fetch('/api/snapshot').then(r => r.json()).catch(() => null),
-      fetch('/api/credentials').then(r => r.json()).catch(() => ({ configured: false })),
-      fetch('/api/credentials?ids=1').then(r => r.json()).catch(() => [])
-    ]);
-    startTransition(() => {
-      const withCreds = new Set(Array.isArray(credIds) ? credIds : []);
-      setPlatforms(ps.map(p => ({ ...p, hasCreds: withCreds.has(p.id) }))); setActions(as);
-      if (sn && sn.file) setSnap(sn.file);
-      setVault(v => ({ ...v, configured: !!vd.configured }));
-      setLoading(false);
-    });
+    try {
+      const [ps, as, sn, vd, credIds] = await Promise.all([getPlatforms(), getActions(),
+        fetch('/api/snapshot').then(r => r.json()).catch(() => null),
+        fetch('/api/credentials').then(r => r.json()).catch(() => ({ configured: false })),
+        fetch('/api/credentials?ids=1').then(r => r.json()).catch(() => [])
+      ]);
+      startTransition(() => {
+        const withCreds = new Set(Array.isArray(credIds) ? credIds : []);
+        setPlatforms(ps.map(p => ({ ...p, hasCreds: withCreds.has(p.id) }))); setActions(as);
+        if (sn && sn.file) setSnap(sn.file);
+        setVault(v => ({ ...v, configured: !!vd.configured }));
+        setLoading(false);
+      });
+    } catch (e) {
+      if (/connexion requise/i.test(e.message)) { setMe(null); setLoading(false); return; }
+      throw e;
+    }
   }, []);
 
-  useEffect(() => { refresh().catch(e => setFlash('Erreur chargement : ' + e.message)); }, [refresh]);
+  /* Session existante ? Sinon → écran de connexion / création du compte admin. */
+  useEffect(() => {
+    (async () => {
+      try {
+        const j = await fetch('/api/auth/me').then(r => r.json());
+        setSetup(!!j.setup);
+        setMe(j.user || null);
+        setAuthReady(true);
+        if (j.user) await refresh();
+        else setLoading(false);
+      } catch (e) {
+        setFlash('Erreur de connexion : ' + e.message);
+        setAuthReady(true);
+        setLoading(false);
+      }
+    })();
+  }, [refresh]);
+
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    setMe(null); setPlatforms(null); setActions(null);
+    setViewUser(null); setViewPlatforms(null); setTab('platforms'); setLoading(false);
+  };
+
+  const openBoard = async (u) => {
+    try {
+      const rows = await api('/api/platforms?user=' + encodeURIComponent(u.id));
+      setViewPlatforms(rows);
+      setViewUser(u);
+      setTab('platforms');
+    } catch (e) {
+      setFlash('Erreur : ' + e.message);
+    }
+  };
 
   const notify = (msg) => { setFlash(msg); setTimeout(() => setFlash(''), 2600); };
   const snapNow = () => postSnapshot().then(s => setSnap(s.file || '—')).catch(() => { });
@@ -98,9 +145,12 @@ export default function Home() {
     .then(() => notify('Plateforme ajoutée ✔')).catch(e => notify('Erreur : ' + e.message));
   const saveP = (p) => {
     const isNew = !p.id;
+    const admin = me.role === 'admin';
     (isNew
-      ? postPlatform({ name: p.name, url: p.url, cat: p.cat, note: p.note })
-      : patchPlatform(p.id, { name: p.name, url: p.url, cat: p.cat, status: p.status, note: p.note, unote: p.unote, gain: p.gain })
+      ? postPlatform({ name: p.name, url: p.url, cat: p.cat, note: p.note, congo: p.congo, status: p.status })
+      : patchPlatform(p.id, admin
+          ? { name: p.name, url: p.url, cat: p.cat, status: p.status, congo: p.congo, note: p.note, unote: p.unote, gain: p.gain }
+          : { status: p.status, unote: p.unote, gain: p.gain })
     ).then(() => refresh()).then(snapNow)
       .then(() => notify(isNew ? 'Plateforme ajoutée ✔' : 'Enregistré ✔'))
       .catch(e => notify('Erreur : ' + e.message));
@@ -138,6 +188,7 @@ export default function Home() {
     const main = platforms.filter(p => p.cat !== 'bloquees');
     const s = { total: main.length, gain: 0 };
     Object.keys(P_STATUSES).forEach(k => { s[k] = main.filter(p => p.status === k).length; });
+    s.congoOk = main.filter(p => p.congo === 'ok').length;
     s.gain = main.reduce((acc, p) => acc + (parseFloat(p.gain) || 0), 0);
     return s;
   }, [platforms]);
@@ -156,6 +207,9 @@ export default function Home() {
 
   const blockedList = useMemo(() => (platforms || []).filter(p => p.cat === 'bloquees'), [platforms]);
 
+  const viewMain = useMemo(() => (viewPlatforms || []).filter(p => p.cat !== 'bloquees'), [viewPlatforms]);
+  const viewBlocked = useMemo(() => (viewPlatforms || []).filter(p => p.cat === 'bloquees'), [viewPlatforms]);
+
   const credsState = {
     configured: vault.configured,
     unlocked: vault.unlocked,
@@ -164,6 +218,18 @@ export default function Home() {
     lock: () => setVault(v => ({ ...v, master: null, unlocked: false }))
   };
 
+  if (!authReady) return <div className="loading">Chargement…</div>;
+  if (!me) {
+    return (
+      <Login
+        setup={setup}
+        onDone={async (u) => {
+          setMe(u); setSetup(false); setLoading(true);
+          await refresh();
+        }}
+      />
+    );
+  }
   if (loading) return <div className="loading">Chargement de la base…</div>;
 
   return (
@@ -175,8 +241,12 @@ export default function Home() {
             <p className="sub">Next.js + SQLite · coffre-fort AES-256 · sauvegarde auto</p>
           </div>
           <div className="snap">
-            💾 Dernier snapshot : <code>{snap}</code>
-            {vault.configured && (
+            <span className="who">👤 <b>{me.name}</b>
+              {me.role === 'admin' && <span className="role-badge">admin</span>}
+              <button className="btn ghost sm" onClick={logout} title="Fermer la session">Déconnexion</button>
+            </span>
+            💾 <code>{snap}</code>
+            {me.role === 'admin' && vault.configured && (
               <button className="btn ghost sm" onClick={credsState.lock} title="Verrouiller le coffre">
                 {vault.unlocked ? '🔒 Verrouiller' : '🔐 Coffre'}
               </button>
@@ -184,9 +254,12 @@ export default function Home() {
           </div>
         </div>
         <nav className="tabs">
-          <button className={tab === 'platforms' ? 'active' : ''} onClick={() => setTab('platforms')}>🌐 Plateformes</button>
+          <button className={tab === 'platforms' ? 'active' : ''} onClick={() => { setViewUser(null); setViewPlatforms(null); setTab('platforms'); }}>🌐 Plateformes</button>
           <button className={tab === 'kanban' ? 'active' : ''} onClick={() => setTab('kanban')}>📋 Kanban</button>
           <button className={tab === 'rules' ? 'active' : ''} onClick={() => setTab('rules')}>📜 Règles d&apos;or</button>
+          {me.role === 'admin' && (
+            <button className={tab === 'team' ? 'active' : ''} onClick={() => setTab('team')}>👥 Équipe</button>
+          )}
         </nav>
       </header>
 
@@ -194,19 +267,49 @@ export default function Home() {
 
       {tab === 'platforms' && (
         <main className="kb-main">
-          <div className="chips">
-            <span className="chip money">💰 {stats.gain} €/mois encaissés · {stats.avec_missions} avec missions · {stats.en_cours} en cours</span>
-          </div>
-          <PlatformKanban
-            platforms={mainList}
-            blocked={blockedList}
-            q={q}
-            setQ={setQ}
-            onMove={moveP}
-            onEdit={p => setEditPlatform(p)}
-            onAdd={status => setEditPlatform({ id: null, status, cat: 'ia' })}
-          />
+          {viewUser ? (
+            <>
+              <div className="view-banner">
+                <span>👁 Tableau de <b>{viewUser.name}</b> — lecture seule</span>
+                <button className="btn ghost sm" onClick={() => { setViewUser(null); setViewPlatforms(null); setTab('team'); }}>
+                  ← Retour à l&apos;équipe
+                </button>
+              </div>
+              <PlatformKanban
+                platforms={viewMain}
+                blocked={viewBlocked}
+                q=""
+                setQ={() => {}}
+                readOnly
+              />
+            </>
+          ) : (
+            <>
+              <div className="chips">
+                <span className="chip money">💰 {stats.gain} €/mois encaissés · {stats.avec_missions} avec missions · {stats.en_cours} en cours</span>
+                <span className="chip congo">🇨🇬 {stats.congoOk} accessibles depuis le Congo</span>
+              </div>
+              {platforms.filter(p => p.cat !== 'bloquees').length === 0 && (
+                <div className="view-banner">
+                  🚫 Aucun site ne t&apos;a encore été attribué. Demande à l&apos;administrateur de t&apos;en autoriser.
+                </div>
+              )}
+              <PlatformKanban
+                platforms={mainList}
+                blocked={blockedList}
+                q={q}
+                setQ={setQ}
+                onMove={moveP}
+                onEdit={p => setEditPlatform(p)}
+                onAdd={status => setEditPlatform({ id: null, status, cat: 'ia' })}
+              />
+            </>
+          )}
         </main>
+      )}
+
+      {tab === 'team' && me.role === 'admin' && (
+        <Team me={me} onOpenBoard={openBoard} />
       )}
 
       {tab === 'kanban' && (
@@ -217,6 +320,7 @@ export default function Home() {
             onEdit={a => setEditAction(a)}
             onDelete={removeA}
             onAdd={status => setEditAction({ id: null, status, phase: 'p1' })}
+            readOnly={me.role !== 'admin'}
           />
           <details className="addbox">
             <summary>📖 Vue par phase (légende)</summary>
@@ -259,7 +363,9 @@ export default function Home() {
           onClose={() => setEditPlatform(null)}
           onSave={saveP}
           onDelete={removeP}
-          onCreds={p => { setCredFor(p); }}
+          canDelete={me.role === 'admin'}
+          canEditCatalog={me.role === 'admin'}
+          onCreds={me.role === 'admin' ? (p => { setCredFor(p); }) : undefined}
         />
       )}
       {credFor && (

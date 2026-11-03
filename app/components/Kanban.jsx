@@ -8,7 +8,7 @@ import { A_STATUSES } from '../lib/kb.js';
  * Clic sur une carte → modale d'édition (gérée par le parent via onEdit).
  * Ajout rapide en bas de chaque colonne.
  */
-export default function Kanban({ actions, onMove, onEdit, onDelete, onAdd }) {
+export default function Kanban({ actions, onMove, onEdit, onDelete, onAdd, readOnly = false }) {
   const [dragId, setDragId] = useState(null);
   const [overCol, setOverCol] = useState(null);
   const [collapsed, setCollapsed] = useState({});
@@ -22,7 +22,7 @@ export default function Kanban({ actions, onMove, onEdit, onDelete, onAdd }) {
   const drop = (status, e) => {
     e.preventDefault();
     setOverCol(null);
-    if (dragId) onMove(dragId, status);
+    if (!readOnly && dragId) onMove(dragId, status);
     setDragId(null);
   };
 
@@ -36,9 +36,9 @@ export default function Kanban({ actions, onMove, onEdit, onDelete, onAdd }) {
             <div
               key={col.id}
               className={'kb-col' + (isOver ? ' over' : '')}
-              onDragOver={e => { e.preventDefault(); setOverCol(col.id); }}
-              onDragLeave={() => setOverCol(c => (c === col.id ? null : c))}
-              onDrop={e => drop(col.id, e)}
+              onDragOver={readOnly ? undefined : e => { e.preventDefault(); setOverCol(col.id); }}
+              onDragLeave={readOnly ? undefined : () => setOverCol(c => (c === col.id ? null : c))}
+              onDrop={readOnly ? undefined : e => drop(col.id, e)}
             >
               <div className="kb-col-head">
                 <button
@@ -57,25 +57,27 @@ export default function Kanban({ actions, onMove, onEdit, onDelete, onAdd }) {
                   {items.map(a => (
                     <div
                       key={a.id}
-                      className={'kb-card' + (a.status === 'fait' ? ' done' : '') + (dragId === a.id ? ' dragging' : '')}
-                      draggable
-                      onDragStart={() => setDragId(a.id)}
-                      onDragEnd={() => { setDragId(null); setOverCol(null); }}
-                      onClick={() => onEdit(a)}
+                      className={'kb-card' + (a.status === 'fait' ? ' done' : '') + (dragId === a.id ? ' dragging' : '') + (readOnly ? ' readonly' : '')}
+                      draggable={!readOnly}
+                      onDragStart={readOnly ? undefined : () => setDragId(a.id)}
+                      onDragEnd={readOnly ? undefined : () => { setDragId(null); setOverCol(null); }}
+                      onClick={readOnly ? undefined : () => onEdit(a)}
                     >
                       <div className="kb-card-top">
                         <span className="kb-phase">{a.phase.toUpperCase()}</span>
-                        <div className="kb-move" onClick={e => e.stopPropagation()}>
-                          {col.id !== 'a_faire' && (
-                            <button title="← À faire" onClick={() => onMove(a.id, 'a_faire')}>←</button>
-                          )}
-                          {col.id !== 'fait' && (
-                            <button title="Fait →" onClick={() => onMove(a.id, 'fait')}>→</button>
-                          )}
-                          {col.id === 'a_faire' && (
-                            <button title="En cours →" onClick={() => onMove(a.id, 'en_cours')}>→</button>
-                          )}
-                        </div>
+                        {!readOnly && (
+                          <div className="kb-move" onClick={e => e.stopPropagation()}>
+                            {col.id !== 'a_faire' && (
+                              <button title="← À faire" onClick={() => onMove(a.id, 'a_faire')}>←</button>
+                            )}
+                            {col.id !== 'fait' && (
+                              <button title="Fait →" onClick={() => onMove(a.id, 'fait')}>→</button>
+                            )}
+                            {col.id === 'a_faire' && (
+                              <button title="En cours →" onClick={() => onMove(a.id, 'en_cours')}>→</button>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="kb-title">{a.title}</div>
                       {a.detail && <div className="kb-detail">{a.detail}</div>}
@@ -83,14 +85,14 @@ export default function Kanban({ actions, onMove, onEdit, onDelete, onAdd }) {
                     </div>
                   ))}
 
-                  <button className="kb-add" onClick={() => onAdd(col.id)}>＋ Ajouter</button>
+                  {!readOnly && <button className="kb-add" onClick={() => onAdd(col.id)}>＋ Ajouter</button>}
                 </>
               )}
             </div>
           );
         })}
       </div>
-      <p className="kb-hint">💡 Glisse-dépose les cartes · clic pour éditer · ← → pour mobile</p>
+      <p className="kb-hint">{readOnly ? '👁 Lecture seule' : '💡 Glisse-dépose les cartes · clic pour éditer · ← → pour mobile'}</p>
     </div>
   );
 }

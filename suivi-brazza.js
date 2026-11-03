@@ -7,9 +7,14 @@ const P_STATUSES = {
   pas_inscrit:    { label: 'Pas inscrit',                bg: '#eef0f2', fg: '#4b5561' },
   en_cours:       { label: 'Inscription / éval. en cours', bg: '#e0ecfb', fg: '#1d4ed8' },
   sans_missions:  { label: 'Inscrit · pas de missions',   bg: '#fdf0d5', fg: '#b45309' },
+  in_review:      { label: 'In review',                    bg: '#ede6f7', fg: '#6d28d9' },
   avec_missions:  { label: 'Inscrit · missions ✔',        bg: '#d8f2de', fg: '#166534' },
-  pause:          { label: 'À laisser / en pause',        bg: '#ede6f7', fg: '#6d28d9' },
   abandonne:      { label: 'Abandonné',                   bg: '#f6e2e2', fg: '#9f1239' }
+};
+const CONGO_STATUSES = {
+  ok:       { label: '🇨🇬 Congo OK',          bg: '#d8f2de', fg: '#166534' },
+  verifier: { label: '🇨🇬 À vérifier',        bg: '#fdf0d5', fg: '#b45309' },
+  non:      { label: '🚫 Congo non',          bg: '#f6e2e2', fg: '#9f1239' }
 };
 const A_STATUSES = {
   a_faire: { label: 'À faire', bg: '#eef0f2', fg: '#4b5561' },
@@ -147,7 +152,9 @@ function load() {
     if (!d || !Array.isArray(d.platforms) || !Array.isArray(d.actions)) return seed();
     d.platforms.forEach(p => {
       p.url = p.url || ''; p.unote = p.unote || ''; p.gain = p.gain || '';
-      if (!p.status) p.status = (p.cat === 'bloquees') ? 'abandonne' : 'pas_inscrit';
+      if (p.status === 'pause') p.status = 'in_review'; // ancien statut « pause »
+      if (!P_STATUSES[p.status]) p.status = (p.cat === 'bloquees') ? 'abandonne' : 'pas_inscrit';
+      if (!CONGO_STATUSES[p.congo]) p.congo = (p.cat === 'bloquees') ? 'non' : 'ok';
       if (!p.id) p.id = 'p' + Math.random().toString(36).slice(2);
     });
     d.actions.forEach(a => {
@@ -200,6 +207,14 @@ function statusSelect(p) {
   return '<select class="stsel" data-id="' + p.id + '" style="background:' + st.bg + ';color:' + st.fg + '">' + opts + '</select>';
 }
 
+function congoSelect(p) {
+  const cg = CONGO_STATUSES[p.congo] || CONGO_STATUSES.ok;
+  const opts = Object.keys(CONGO_STATUSES).map(k =>
+    '<option value="' + k + '"' + (k === p.congo ? ' selected' : '') + '>' + esc(CONGO_STATUSES[k].label) + '</option>'
+  ).join('');
+  return '<select class="cgsel" data-id="' + p.id + '" style="background:' + cg.bg + ';color:' + cg.fg + '">' + opts + '</select>';
+}
+
 function renderPlatforms() {
   const q = ui.q.trim().toLowerCase();
   const list = db.platforms.filter(p => {
@@ -228,6 +243,7 @@ function renderPlatforms() {
           ? '<a class="pname" target="_blank" rel="noopener" href="' + esc(p.url) + '">' + esc(p.name) + ' ↗</a>'
           : '<span class="pname">' + esc(p.name) + '</span>') +
         '<span class="catchip">' + esc(catLabel(p.cat).replace(/^[^\s]+\s/, '')) + '</span>' +
+        congoSelect(p) +
         statusSelect(p) +
         '</div>' +
         (p.note ? '<div class="pnote">' + esc(p.note) + '</div>' : '') +
@@ -357,6 +373,14 @@ function bindEvents() {
         const st = P_STATUSES[p.status];
         t.style.background = st.bg; t.style.color = st.fg;
         save(); renderStats();
+      }
+    } else if (t.classList.contains('cgsel')) {
+      const p = db.platforms.find(x => x.id === t.dataset.id);
+      if (p) {
+        p.congo = t.value;
+        const cg = CONGO_STATUSES[p.congo];
+        t.style.background = cg.bg; t.style.color = cg.fg;
+        save();
       }
     } else if (t.classList.contains('unote')) {
       const p = db.platforms.find(x => x.id === t.closest('.card').dataset.pid);

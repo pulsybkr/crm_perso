@@ -27,8 +27,10 @@ header {
 .headrow { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
 h1 { margin: 0; font-size: 26px; letter-spacing: -0.3px; }
 .sub { margin: 4px 0 0; color: var(--mut); font-size: 13.5px; }
-.snap { color: var(--mut); font-size: 12.5px; }
+.snap { color: var(--mut); font-size: 12.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .snap code { background: #fff; border: 1px solid var(--line); padding: 2px 7px; border-radius: 6px; }
+.who { display: inline-flex; align-items: center; gap: 6px; }
+.role-badge { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; background: #ede6f7; color: #6d28d9; padding: 2px 7px; border-radius: 999px; }
 
 .tabs { display: flex; gap: 8px; margin: 18px 0 14px; flex-wrap: wrap; }
 .tabs button {
@@ -60,6 +62,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -0.3px; }
 .chip .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .chip.active { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink) inset; }
 .chip.money { cursor: default; background: #e3f4e8; border-color: #bbe3c8; color: #14532d; }
+.chip.congo { cursor: default; background: #e6f6f2; border-color: #bde5da; color: #0f766e; }
 
 .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0 14px; }
 .toolbar input[type="search"], .toolbar select {
@@ -251,6 +254,10 @@ footer {
 .kb-title { font-size: 13.8px; font-weight: 650; line-height: 1.35; }
 .kb-detail { color: var(--mut); font-size: 12.5px; margin-top: 3px; }
 .kb-unote { color: #7c6617; background: #fdf6e3; font-size: 12px; border-radius: 7px; padding: 4px 8px; margin-top: 6px; }
+.kb-congo {
+  display: inline-block; font-size: 10.5px; font-weight: 800; letter-spacing: 0.2px;
+  padding: 2px 7px; border-radius: 999px; margin-top: 5px;
+}
 .kb-add {
   width: 100%; border: 1.5px dashed #b9c0c9; background: transparent; color: var(--mut);
   border-radius: 9px; padding: 7px; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 2px;
@@ -300,3 +307,68 @@ footer {
   text-decoration: none; font-weight: 800;
 }
 .kb-link:hover { background: #2563eb; color: #fff; }
+
+/* ================= Connexion ================= */
+.auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.auth-card {
+  width: 100%; max-width: 390px; background: #fff; border: 1px solid var(--line);
+  border-radius: 16px; padding: 26px; display: flex; flex-direction: column; gap: 12px;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.08);
+}
+.auth-card h1 { font-size: 21px; }
+.auth-sub { color: var(--mut); font-size: 13px; margin: 0 0 4px; line-height: 1.5; }
+.auth-card label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 700; color: #4b5561; }
+.auth-card input { border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; font-size: 14px; font-family: inherit; }
+.auth-card input:focus { outline: 2px solid #cfe0ff; border-color: #93b4f0; }
+.auth-card .btn { margin-top: 6px; }
+.auth-error { background: #fdecec; color: #9f1239; border: 1px solid #f5c2c2; border-radius: 9px; padding: 8px 10px; font-size: 12.5px; }
+.auth-note { color: var(--mut); font-size: 11.5px; margin: 0; }
+
+/* ================= Équipe (admin) ================= */
+.team-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.team-head h2 { margin: 0; font-size: 18px; }
+.team-add { display: flex; gap: 8px; flex-wrap: wrap; }
+.team-add input { border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; font-size: 13px; min-width: 220px; font-family: inherit; }
+.team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.team-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.team-card-head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.me-badge { font-size: 10px; font-weight: 800; background: #e0ecfb; color: #1d4ed8; padding: 2px 7px; border-radius: 999px; }
+.team-stats { display: flex; flex-wrap: wrap; gap: 5px; }
+.team-stat { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.team-meta { color: var(--mut); font-size: 12px; }
+.team-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.btn.danger { color: #9f1239; border-color: #f0c8c8; }
+.code-once {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: #fff8e6; border: 1px solid #f0d9a0; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; font-size: 13.5px;
+}
+.code-once code { font-size: 18px; font-weight: 800; letter-spacing: 1px; background: #fff; padding: 2px 8px; border-radius: 6px; border: 1px solid #f0d9a0; }
+.code-warn { color: #9a6a00; font-size: 11.5px; margin-top: 3px; }
+
+/* Vue admin en lecture seule */
+.view-banner {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: #eef4ff; border: 1px solid #cddcf5; color: #1d4ed8;
+  border-radius: 10px; padding: 8px 12px; font-size: 13px; margin-bottom: 10px;
+}
+.kb-card.readonly { cursor: default; }
+
+/* ================= Sites autorisés par membre ================= */
+.modal.upm { width: min(660px, 94vw); max-height: 86vh; display: flex; flex-direction: column; }
+.upm-intro { color: var(--mut); font-size: 12.5px; margin: 0 0 10px; line-height: 1.5; }
+.upm-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.upm-tools input[type="search"] { flex: 1; min-width: 180px; border: 1px solid var(--line); border-radius: 9px; padding: 7px 10px; font-size: 13px; font-family: inherit; }
+.upm-bulk { display: flex; gap: 5px; flex-wrap: wrap; }
+.upm-list { overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; background: #fbfcfd; padding: 4px; flex: 1; min-height: 220px; }
+.upm-row { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 7px; cursor: pointer; font-size: 13px; }
+.upm-row:hover { background: #f0f4f8; }
+.upm-row.off { opacity: 0.62; }
+.upm-row input { width: 15px; height: 15px; accent-color: var(--acc); }
+.upm-name { flex: 1; }
+.upm-tags { display: flex; gap: 4px; align-items: center; }
+.upm-cat { font-size: 10.5px; color: var(--mut); background: #eef1f4; padding: 1px 6px; border-radius: 999px; }
+.upm-congo { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; }
+.upm .modal-foot { margin-top: 10px; }
+.upm-count { font-size: 12px; color: var(--mut); }
+
+.team-hint { color: var(--mut); font-size: 12px; margin: -4px 0 12px; line-height: 1.5; }

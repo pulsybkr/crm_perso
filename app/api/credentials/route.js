@@ -4,6 +4,7 @@ import {
   encryptWithMaster, decryptWithMaster
 } from '@/lib/crypto.js';
 import { db } from '@/lib/db.js';
+import { requireAdmin } from '@/lib/auth.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,10 +18,13 @@ const needMaster = (req) => {
   return master;
 };
 
+const deny = (e) => NextResponse.json({ error: e.message }, { status: e.status || 401 });
+
 /* ============ Coffre ============ */
 
 /* GET → état du coffre · ?ids=1 → platform_id ayant des comptes · ?platform=xxx → comptes décryptés */
 export async function GET(req) {
+  try { await requireAdmin(); } catch (e) { return deny(e); }
   const { searchParams } = new URL(req.url);
 
   if (searchParams.get('ids') === '1') {
@@ -48,6 +52,7 @@ export async function GET(req) {
 /* POST → définir le maître (première fois) ou le changer (rechiffre tout) */
 export async function POST(req) {
   try {
+    await requireAdmin();
     const b = await req.json();
     if (!b || !b.master) return bad('master requis');
     if (String(b.master).length < 6) return bad('mot de passe maître : 6 caractères minimum', 422);
@@ -78,6 +83,7 @@ export async function POST(req) {
    body: { platformId, id?, label?, username?, password?, cnote?, loginUrl? } */
 export async function PUT(req) {
   try {
+    await requireAdmin();
     const b = await req.json();
     if (!b || !b.platformId) return bad('platformId requis');
     const master = needMaster(req);
@@ -118,6 +124,7 @@ export async function PUT(req) {
 
 /* DELETE → supprimer un compte (?account=xxx) */
 export async function DELETE(req) {
+  try { await requireAdmin(); } catch (e) { return deny(e); }
   const { searchParams } = new URL(req.url);
   const aid = searchParams.get('account');
   if (!aid) return bad('account requis');

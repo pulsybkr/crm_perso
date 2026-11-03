@@ -1,17 +1,19 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { P_STATUSES, CATS } from '../lib/kb.js';
+import { P_STATUSES, CATS, CONGO_STATUSES } from '../lib/kb.js';
 
 /**
  * Modale d'édition d'une plateforme : statut, catégorie, URL, note officielle,
  * notes perso, €/mois, identifiants (bouton 🔐 → CredentialsModal du parent).
  */
-export default function PlatformModal({ platform, onClose, onSave, onDelete, onCreds }) {
+export default function PlatformModal({ platform, onClose, onSave, onDelete, onCreds, canDelete = true, canEditCatalog = true }) {
   const isNew = !platform.id;
+  const catalogLocked = !isNew && !canEditCatalog;
   const [name, setName] = useState(platform.name || '');
   const [url, setUrl] = useState(platform.url || '');
   const [cat, setCat] = useState(platform.cat || 'ia');
   const [status, setStatus] = useState(platform.status || 'pas_inscrit');
+  const [congo, setCongo] = useState(platform.congo || (platform.cat === 'bloquees' ? 'non' : 'ok'));
   const [note, setNote] = useState(platform.note || '');
   const [unote, setUnote] = useState(platform.unote || '');
   const [gain, setGain] = useState(platform.gain || '');
@@ -27,12 +29,13 @@ export default function PlatformModal({ platform, onClose, onSave, onDelete, onC
     if (!name.trim()) return;
     onSave({
       ...platform,
-      name: name.trim(), url: url.trim(), cat, status, note: note.trim(),
+      name: name.trim(), url: url.trim(), cat, status, congo, note: note.trim(),
       unote: unote.trim(), gain: String(gain || '')
     });
   };
 
   const st = P_STATUSES[status] || P_STATUSES.pas_inscrit;
+  const cg = CONGO_STATUSES[congo] || CONGO_STATUSES.ok;
 
   return (
     <div className="modal-back" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -44,12 +47,12 @@ export default function PlatformModal({ platform, onClose, onSave, onDelete, onC
         <form onSubmit={submit}>
           <label>
             Nom
-            <input required autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Ex : Mindrift" />
+            <input required autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Ex : Mindrift" disabled={catalogLocked} />
           </label>
           <label>
             Lien
             <span className="pwrow">
-              <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" />
+              <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" disabled={catalogLocked} />
               {url && (
                 <a className="btn ghost sm" target="_blank" rel="noopener noreferrer" href={url} title="Ouvrir le site">↗</a>
               )}
@@ -58,7 +61,7 @@ export default function PlatformModal({ platform, onClose, onSave, onDelete, onC
           <div className="modal-cols">
             <label>
               Catégorie
-              <select value={cat} onChange={e => setCat(e.target.value)}>
+              <select value={cat} onChange={e => setCat(e.target.value)} disabled={catalogLocked}>
                 {CATS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
               </select>
             </label>
@@ -70,27 +73,35 @@ export default function PlatformModal({ platform, onClose, onSave, onDelete, onC
             </label>
           </div>
           <label>
+            Inscription depuis le Congo
+            <select value={congo} onChange={e => setCongo(e.target.value)} disabled={catalogLocked} style={{ background: cg.bg, color: cg.fg, fontWeight: 700 }}>
+              {Object.entries(CONGO_STATUSES).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
+            </select>
+          </label>
+          <label>
             €/mois encaissé le mois dernier
             <input type="number" min="0" value={gain} onChange={e => setGain(e.target.value)} placeholder="0" />
           </label>
           <label>
             Note officielle (tarifs, conditions…)
-            <textarea rows={3} value={note} onChange={e => setNote(e.target.value)} />
+            <textarea rows={3} value={note} onChange={e => setNote(e.target.value)} disabled={catalogLocked} />
           </label>
           <label>
             Tes notes perso
             <textarea rows={2} value={unote} onChange={e => setUnote(e.target.value)} placeholder="Date d'inscription, évaluations passées…" />
           </label>
           <div className="modal-foot">
-            {isNew
-              ? <span />
-              : <div className="modal-foot-left">
-                  <button type="button" className="vaultbtn big" onClick={() => onCreds(platform)}>🔐 Identifiants</button>
+          {!isNew
+            ? <div className="modal-foot-left">
+                {onCreds && <button type="button" className="vaultbtn big" onClick={() => onCreds(platform)}>🔐 Identifiants</button>}
+                {canDelete && (
                   <button
                     type="button" className="modal-del"
-                    onClick={() => { if (window.confirm('Supprimer ' + platform.name + ' ?')) onDelete(platform); }}
+                    onClick={() => { if (window.confirm('Supprimer ' + platform.name + ' ?\nElle disparaîtra pour TOUT LE MONDE.')) onDelete(platform); }}
                   >🗑</button>
-                </div>}
+                )}
+              </div>
+            : <span />}
             <div className="modal-actions">
               <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
               <button type="submit" className="btn">Enregistrer</button>

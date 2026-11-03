@@ -1,13 +1,13 @@
 'use client';
 import { useState } from 'react';
-import { P_STATUSES, CAT_SHORT } from '../lib/kb.js';
+import { P_STATUSES, CAT_SHORT, CONGO_STATUSES } from '../lib/kb.js';
 
 /**
  * Kanban des plateformes : colonnes = 6 statuts, cartes groupées visuellement
  * par catégorie (badge). Drag & drop entre colonnes, clic → modale d'édition.
  * Les 12 plateformes « bloquées » restent en bas, à part (section repliable).
  */
-export default function PlatformKanban({ platforms, onMove, onEdit, onAdd, blocked, q, setQ }) {
+export default function PlatformKanban({ platforms, onMove, onEdit, onAdd, blocked, q, setQ, readOnly = false }) {
   const [dragId, setDragId] = useState(null);
   const [overCol, setOverCol] = useState(null);
   const [collapsed, setCollapsed] = useState({});
@@ -18,15 +18,17 @@ export default function PlatformKanban({ platforms, onMove, onEdit, onAdd, block
   const drop = (status, e) => {
     e.preventDefault();
     setOverCol(null);
-    if (dragId) onMove(dragId, status);
+    if (!readOnly && dragId) onMove(dragId, status);
     setDragId(null);
   };
 
   return (
     <div className="kb-wrap">
-      <div className="toolbar">
-        <input type="search" placeholder="🔎 Filtrer les cartes…" value={q} onChange={e => setQ(e.target.value)} />
-      </div>
+      {!readOnly && (
+        <div className="toolbar">
+          <input type="search" placeholder="🔎 Filtrer les cartes…" value={q} onChange={e => setQ(e.target.value)} />
+        </div>
+      )}
 
       <div className="kb-board kb-board-6">
         {cols.map(([sid, st]) => {
@@ -36,9 +38,9 @@ export default function PlatformKanban({ platforms, onMove, onEdit, onAdd, block
             <div
               key={sid}
               className={'kb-col' + (isOver ? ' over' : '')}
-              onDragOver={e => { e.preventDefault(); setOverCol(sid); }}
-              onDragLeave={() => setOverCol(c => (c === sid ? null : c))}
-              onDrop={e => drop(sid, e)}
+              onDragOver={readOnly ? undefined : e => { e.preventDefault(); setOverCol(sid); }}
+              onDragLeave={readOnly ? undefined : () => setOverCol(c => (c === sid ? null : c))}
+              onDrop={readOnly ? undefined : e => drop(sid, e)}
             >
               <div className="kb-col-head">
                 <button
@@ -54,11 +56,11 @@ export default function PlatformKanban({ platforms, onMove, onEdit, onAdd, block
                   {items.map(p => (
                     <div
                       key={p.id}
-                      className={'kb-card' + (dragId === p.id ? ' dragging' : '')}
-                      draggable
-                      onDragStart={() => setDragId(p.id)}
-                      onDragEnd={() => { setDragId(null); setOverCol(null); }}
-                      onClick={() => onEdit(p)}
+                      className={'kb-card' + (dragId === p.id ? ' dragging' : '') + (readOnly ? ' readonly' : '')}
+                      draggable={!readOnly}
+                      onDragStart={readOnly ? undefined : () => setDragId(p.id)}
+                      onDragEnd={readOnly ? undefined : () => { setDragId(null); setOverCol(null); }}
+                      onClick={readOnly ? undefined : () => onEdit(p)}
                     >
                       <div className="kb-card-top">
                         <span className="kb-cat" data-cat={p.cat}>{CAT_SHORT[p.cat] || p.cat}</span>
@@ -77,11 +79,15 @@ export default function PlatformKanban({ platforms, onMove, onEdit, onAdd, block
                         </span>
                       </div>
                       <div className="kb-title">{p.name}</div>
+                      <span
+                        className="kb-congo"
+                        style={{ background: (CONGO_STATUSES[p.congo] || CONGO_STATUSES.ok).bg, color: (CONGO_STATUSES[p.congo] || CONGO_STATUSES.ok).fg }}
+                      >{(CONGO_STATUSES[p.congo] || CONGO_STATUSES.ok).short}</span>
                       {p.unote && <div className="kb-unote">📝 {p.unote}</div>}
                       {p.hasCreds && <div className="kb-vault">🔐 identifiants</div>}
                     </div>
                   ))}
-                  <button className="kb-add" onClick={() => onAdd(sid)}>＋</button>
+                  {!readOnly && <button className="kb-add" onClick={() => onAdd(sid)}>＋</button>}
                 </>
               )}
             </div>
