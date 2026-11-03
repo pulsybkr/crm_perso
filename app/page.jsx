@@ -243,7 +243,13 @@ export default function Home() {
           <div className="snap">
             <span className="who">👤 <b>{me.name}</b>
               {me.role === 'admin' && <span className="role-badge">admin</span>}
-              <button className="btn ghost sm" onClick={logout} title="Fermer la session">Déconnexion</button>
+              <button className="btn ghost sm" onClick={async () => {
+                 const c = window.prompt('Nouveau code (6 caractères min) :');
+                 if (!c) return;
+                 try { await api('/api/auth/code', { method: 'POST', body: JSON.stringify({ code: c }) }); alert('Code modifié ✔'); }
+                 catch (e) { alert(e.message); }
+               }} title="Changer mon code">🔑 Code</button>
+               <button className="btn ghost sm" onClick={logout} title="Fermer la session">Déconnexion</button>
             </span>
             💾 <code>{snap}</code>
             {me.role === 'admin' && vault.configured && (
