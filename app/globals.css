@@ -324,7 +324,7 @@ footer {
 .auth-error { background: #fdecec; color: #9f1239; border: 1px solid #f5c2c2; border-radius: 9px; padding: 8px 10px; font-size: 12.5px; }
 .auth-note { color: var(--mut); font-size: 11.5px; margin: 0; }
 
-/* ================= Équipe (admin) ================= */
+/* ================= Ã‰quipe (admin) ================= */
 .team-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .team-head h2 { margin: 0; font-size: 18px; }
 .team-add { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -353,7 +353,7 @@ footer {
 }
 .kb-card.readonly { cursor: default; }
 
-/* ================= Sites autorisés par membre ================= */
+/* ================= Sites autorisÃ©s par membre ================= */
 .modal.upm { width: min(660px, 94vw); max-height: 86vh; display: flex; flex-direction: column; }
 .upm-intro { color: var(--mut); font-size: 12.5px; margin: 0 0 10px; line-height: 1.5; }
 .upm-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
